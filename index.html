@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Online Exam System</title>
+    <title>ระบบสอบออนไลน์ (Online Exam System)</title>
     
     <!-- 1. ฟอนต์ Sarabun -->
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -17,6 +17,14 @@
                     fontFamily: {
                         sans: ['Sarabun', 'sans-serif'],
                     },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'slide-up': 'slideUp 0.4s ease-out',
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } }
+                    }
                 }
             }
         }
@@ -27,67 +35,46 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 4. Lucide Icons (Latest) -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- 4. Lucide Icons (Stable Version) -->
+    <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
     
-    <!-- 5. Firebase (Compat) -->
+    <!-- 5. Firebase (Compat Mode for Standalone) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
     <style>
-        body { font-family: 'Sarabun', sans-serif; background-color: #f9fafb; }
-        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        body { font-family: 'Sarabun', sans-serif; background-color: #f3f4f6; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
-        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        .animate-fade-in { animation: fade-in 0.3s ease-out; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
         #error-log {
-            display: none;
-            background: #fee2e2;
-            color: #991b1b;
-            padding: 20px;
-            margin: 20px;
-            border-radius: 8px;
-            border: 1px solid #f87171;
-            font-family: monospace;
-            white-space: pre-wrap;
-            z-index: 9999;
-            position: relative;
+            display: none; position: fixed; bottom: 20px; right: 20px; max-width: 400px;
+            background: #fee2e2; color: #991b1b; padding: 15px; border-radius: 8px;
+            border: 1px solid #f87171; font-family: monospace; font-size: 12px; z-index: 9999;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
     </style>
 </head>
 <body>
-    <!-- Root Container & Initial Loading Message -->
     <div id="root">
-        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #6b7280;">
-            <svg class="animate-spin" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
-            <p style="margin-top: 1rem; font-size: 1.25rem;">กำลังโหลดระบบ... (Loading)</p>
-            <p style="margin-top: 0.5rem; font-size: 0.875rem;">หากค้างหน้านี้นานเกิน 10 วินาที โปรดตรวจสอบ Console (F12)</p>
+        <div class="flex flex-col items-center justify-center min-h-screen text-gray-500">
+            <svg class="animate-spin mb-4" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+            <p class="text-lg font-medium">กำลังโหลดระบบ...</p>
         </div>
     </div>
-
-    <!-- พื้นที่แสดง Error กรณีโหลดไม่ขึ้น -->
     <div id="error-log"></div>
 
-    <script>
-        // Error Handler
-        window.onerror = function(message, source, lineno, colno, error) {
-            const errorDiv = document.getElementById('error-log');
-            const rootDiv = document.getElementById('root');
-            if (errorDiv && rootDiv) {
-                rootDiv.style.display = 'none';
-                errorDiv.style.display = 'block';
-                errorDiv.innerHTML = `<strong>เกิดข้อผิดพลาด (System Error):</strong>\n\n${message}\n\nLocation: ${source}:${lineno}`;
-            }
-            console.error("Critical Error:", message, error);
-        };
-    </script>
-
-    <!-- Main Application Code -->
     <script type="text/babel">
+        // --- 0. Global Error Handler ---
+        window.onerror = function(msg, source, lineno, colno, error) {
+            const el = document.getElementById('error-log');
+            if(el) { el.style.display = 'block'; el.innerHTML = `<strong>System Error:</strong><br/>${msg}<br/>Line: ${lineno}`; }
+            console.error("App Error:", error);
+        };
+
         const { useState, useEffect, useRef } = React;
 
         // --- 1. Firebase Config ---
@@ -101,177 +88,48 @@
             measurementId: "G-75674HXF78"
         };
 
-        try {
-            if (!firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
-            }
-        } catch (e) {
-            console.error("Firebase Init Error:", e);
-        }
+        try { if (!firebase.apps.length) firebase.initializeApp(firebaseConfig); } 
+        catch (e) { console.error("Firebase Init Error", e); }
         
         const auth = firebase.auth();
         const db = firebase.firestore();
-
         const appId = 'online-exam-default'; 
-        const QUESTIONS_COLLECTION = `artifacts/${appId}/public/data/questions`;
-        const RESULTS_COLLECTION = `artifacts/${appId}/public/data/results`;
-        const SETTINGS_COLLECTION = `artifacts/${appId}/public/data/settings`; 
-        const SETTINGS_DOC_ID = 'config';
+        // Collections
+        const COL_Q = `artifacts/${appId}/public/data/questions`;
+        const COL_R = `artifacts/${appId}/public/data/results`;
+        const COL_S = `artifacts/${appId}/public/data/settings`;
+        const DOC_S = 'config';
 
-        // --- 2. Components (Fixed Icon Rendering) ---
-        const Icon = ({ name, size = 24, className = "" }) => {
-            const spanRef = useRef(null);
+        // --- 2. Icon Component ---
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const ref = useRef(null);
             useEffect(() => {
-                if (spanRef.current && window.lucide && window.lucide.icons && window.lucide.icons[name]) {
-                    spanRef.current.innerHTML = '';
-                    const iconDef = window.lucide.icons[name];
-                    // FIX: Support both createElement (New) and toSvg (Old)
-                    if (typeof window.lucide.createElement === 'function') {
-                        const svg = window.lucide.createElement(iconDef);
-                        svg.setAttribute('width', size);
-                        svg.setAttribute('height', size);
-                        const existingClass = svg.getAttribute('class') || '';
-                        svg.setAttribute('class', `${existingClass} ${className}`.trim());
-                        spanRef.current.appendChild(svg);
-                    } else if (typeof iconDef.toSvg === 'function') {
-                        spanRef.current.innerHTML = iconDef.toSvg({ class: className, width: size, height: size });
-                    }
+                if (ref.current && window.lucide && window.lucide.icons[name]) {
+                    const svg = window.lucide.icons[name].toSvg({ class: className, width: size, height: size });
+                    ref.current.innerHTML = svg;
                 }
             }, [name, size, className]);
-            return <span ref={spanRef} style={{ display: 'inline-flex', verticalAlign: 'middle' }}></span>;
+            return <span ref={ref} className="inline-flex items-center align-middle" />;
         };
-
-        const Clock = (p) => <Icon name="Clock" {...p} />;
-        const CheckCircle = (p) => <Icon name="CheckCircle" {...p} />;
-        const XCircle = (p) => <Icon name="XCircle" {...p} />;
-        const ChevronRight = (p) => <Icon name="ChevronRight" {...p} />;
-        const RefreshCw = (p) => <Icon name="RefreshCw" {...p} />;
-        const Award = (p) => <Icon name="Award" {...p} />;
-        const User = (p) => <Icon name="User" {...p} />;
-        const BookOpen = (p) => <Icon name="BookOpen" {...p} />;
-        const Users = (p) => <Icon name="Users" {...p} />;
-        const Lock = (p) => <Icon name="Lock" {...p} />;
-        const Edit = (p) => <Icon name="Edit" {...p} />;
-        const Save = (p) => <Icon name="Save" {...p} />;
-        const Trash2 = (p) => <Icon name="Trash2" {...p} />;
-        const LogOut = (p) => <Icon name="LogOut" {...p} />;
-        const FileText = (p) => <Icon name="FileText" {...p} />;
-        const Settings = (p) => <Icon name="Settings" {...p} />;
-        const X = (p) => <Icon name="X" {...p} />;
-        const PlusCircle = (p) => <Icon name="PlusCircle" {...p} />;
-        const AlertTriangle = (p) => <Icon name="AlertTriangle" {...p} />;
-        const Download = (p) => <Icon name="Download" {...p} />;
-        const Info = (p) => <Icon name="Info" {...p} />;
-        const Bold = (p) => <Icon name="Bold" {...p} />;
-        const Italic = (p) => <Icon name="Italic" {...p} />;
-        const Underline = (p) => <Icon name="Underline" {...p} />;
-        const ImageIcon = (p) => <Icon name="Image" {...p} />;
-        const Table = (p) => <Icon name="Table" {...p} />;
-        const Type = (p) => <Icon name="Type" {...p} />;
-        const Upload = (p) => <Icon name="Upload" {...p} />;
-        const FileSpreadsheet = (p) => <Icon name="FileSpreadsheet" {...p} />;
-        const Loader = (p) => <Icon name="Loader" {...p} />;
-        const ShieldAlert = (p) => <Icon name="ShieldAlert" {...p} />;
-        const BellRing = (p) => <Icon name="BellRing" {...p} />;
 
         // --- 3. Utilities ---
-        const shuffleArray = (array) => {
-            const newArray = [...array];
-            for (let i = newArray.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-            }
-            return newArray;
+        const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
+        const formatTime = (s) => {
+            const m = Math.floor(s / 60);
+            const sec = s % 60;
+            return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
         };
-
-        const formatTime = (seconds) => {
-            const h = Math.floor(seconds / 3600);
-            const m = Math.floor((seconds % 3600) / 60);
-            const s = seconds % 60;
-            if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-            return `${m}:${s.toString().padStart(2, '0')}`;
-        };
-
-        const exportToCSV = (data, filename) => {
-            if (!data || !data.length) return;
-            const headers = ['Timestamp', 'Student ID', 'Name', 'Score', 'Total', 'Passed', 'Cheating Warnings'];
-            const rows = data.map(item => {
-                const dateStr = item.timestamp?.seconds 
-                ? new Date(item.timestamp.seconds * 1000).toLocaleString() 
-                : item.timestamp || '';
-                return [`"${dateStr}"`, `"${item.studentId}"`, `"${item.firstName} ${item.lastName}"`, item.score, item.total, item.passed ? "Yes" : "No", item.warnings || 0];
-            });
-            const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", filename);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        };
-
-        const downloadTemplate = () => {
-            const headers = ['Question (โจทย์)', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Answer (เฉลยข้อที่ 1-4)'];
-            const sampleRows = [['"1 + 1 เท่ากับเท่าไหร่?"', '1', '2', '3', '4', '2'], ['"เมืองหลวงของไทยคือ?"', 'เชียงใหม่', 'ภูเก็ต', 'กรุงเทพฯ', 'ขอนแก่น', '3']];
-            const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",") + "\n" + sampleRows.map(e => e.join(",")).join("\n");
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "exam_template.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        };
-
+        
         // --- 4. Sub-Components ---
-        const RichTextEditor = ({ value, onChange, placeholder }) => {
-            const textareaRef = useRef(null);
-            const insertTag = (tagOpen, tagClose = "") => {
-                const textarea = textareaRef.current;
-                if (!textarea) return;
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                const text = textarea.value;
-                onChange(text.substring(0, start) + tagOpen + text.substring(start, end) + tagClose + text.substring(end));
-                setTimeout(() => textarea.focus(), 0);
-            };
-            const handleInsertImage = () => {
-                const url = prompt("กรุณาวางลิงก์รูปภาพ (Image URL):", "https://");
-                if (url) insertTag(`<img src="${url}" class="max-w-full h-auto rounded-lg my-2" />`);
-            };
-            const handleInsertTable = () => {
-                insertTag(`<table class="border-collapse border border-gray-400 my-2 w-full text-sm"><thead><tr class="bg-gray-100"><th class="border border-gray-400 p-2">หัวข้อ 1</th><th class="border border-gray-400 p-2">หัวข้อ 2</th></tr></thead><tbody><tr><td class="border border-gray-400 p-2">ข้อมูล 1</td><td class="border border-gray-400 p-2">ข้อมูล 2</td></tr></tbody></table>`);
-            };
-            return (
-                <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition">
-                    <div className="flex flex-wrap gap-1 bg-gray-50 p-2 border-b border-gray-200">
-                        <button type="button" onClick={() => insertTag('<b>', '</b>')} className="p-1.5 hover:bg-gray-200 rounded" title="ตัวหนา"><Bold size={16}/></button>
-                        <button type="button" onClick={() => insertTag('<i>', '</i>')} className="p-1.5 hover:bg-gray-200 rounded" title="ตัวเอียง"><Italic size={16}/></button>
-                        <button type="button" onClick={() => insertTag('<u>', '</u>')} className="p-1.5 hover:bg-gray-200 rounded" title="ขีดเส้นใต้"><Underline size={16}/></button>
-                        <div className="w-px h-6 bg-gray-300 mx-1 self-center"></div>
-                        <button type="button" onClick={() => insertTag('<span class="text-lg">', '</span>')} className="p-1.5 hover:bg-gray-200 rounded" title="ตัวใหญ่"><Type size={16}/></button>
-                        <button type="button" onClick={() => insertTag('<span class="text-xl font-bold">', '</span>')} className="p-1.5 hover:bg-gray-200 rounded" title="หัวข้อ"><Type size={20}/></button>
-                        <div className="w-px h-6 bg-gray-300 mx-1 self-center"></div>
-                        <button type="button" onClick={handleInsertImage} className="p-1.5 hover:bg-gray-200 rounded" title="แทรกรูปภาพ"><ImageIcon size={16}/></button>
-                        <button type="button" onClick={handleInsertTable} className="p-1.5 hover:bg-gray-200 rounded" title="แทรกตาราง"><Table size={16}/></button>
-                    </div>
-                    <textarea ref={textareaRef} className="w-full p-3 outline-none min-h-[120px] font-mono text-sm" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
-                    <div className="bg-gray-50 px-3 py-1 text-xs text-gray-400 text-right">รองรับ HTML Tags</div>
-                </div>
-            );
-        };
-
-        const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
+        const Modal = ({ isOpen, onClose, title, children, size='md' }) => {
             if (!isOpen) return null;
-            const sizeClasses = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl' };
+            const maxW = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-3xl', xl: 'max-w-5xl' }[size];
             return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
-                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} flex flex-col max-h-[90vh] overflow-hidden transform transition-all animate-scale-up`}>
-                        <div className="flex justify-between items-center p-4 border-b bg-gray-50 flex-shrink-0">
-                            <h3 className="font-bold text-lg text-gray-700">{title}</h3>
-                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 hover:bg-gray-200 p-1 rounded-full"><X size={24} /></button>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+                    <div className={`bg-white rounded-2xl shadow-2xl w-full ${maxW} overflow-hidden animate-slide-up flex flex-col max-h-[90vh]`} onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center p-4 border-b bg-gray-50">
+                            <h3 className="font-bold text-lg text-gray-800">{title}</h3>
+                            <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200 text-gray-500 transition"><Icon name="X" size={24}/></button>
                         </div>
                         <div className="p-6 overflow-y-auto custom-scrollbar">{children}</div>
                     </div>
@@ -279,468 +137,478 @@
             );
         };
 
-        const StudentLoginForm = ({ studentInfo, setStudentInfo, onLogin }) => (
-            <div className="space-y-4">
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">รหัสนักเรียน</label><input className="w-full p-3 border rounded-lg" placeholder="เช่น 64001" value={studentInfo.id} onChange={e => setStudentInfo({...studentInfo, id: e.target.value})} /></div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-sm font-bold text-gray-700 mb-1">ชื่อจริง</label><input className="w-full p-3 border rounded-lg" placeholder="ชื่อจริง" value={studentInfo.firstName} onChange={e => setStudentInfo({...studentInfo, firstName: e.target.value})} /></div>
-                    <div><label className="block text-sm font-bold text-gray-700 mb-1">นามสกุล</label><input className="w-full p-3 border rounded-lg" placeholder="นามสกุล" value={studentInfo.lastName} onChange={e => setStudentInfo({...studentInfo, lastName: e.target.value})} /></div>
-                </div>
-                <button onClick={onLogin} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold mt-2 hover:bg-blue-700">เข้าสู่ระบบ</button>
-            </div>
-        );
-
-        const TeacherLoginForm = ({ password, setPassword, onLogin }) => (
-            <div className="space-y-4">
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">รหัสผ่าน</label><input type="password" className="w-full p-3 border rounded-lg" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} /></div>
-                <button onClick={onLogin} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold mt-2 hover:bg-indigo-700">ยืนยัน</button>
-            </div>
-        );
-
-        const QuestionForm = ({ initialData, onSave, onCancel, isSaving }) => {
-            const [question, setQuestion] = useState(initialData?.question || '');
-            const [options, setOptions] = useState(initialData?.options || ['', '', '', '']);
-            const [correct, setCorrect] = useState(initialData?.correct || 0);
-            const handleOptionChange = (index, value) => {
-                const newOptions = [...options];
-                newOptions[index] = value;
-                setOptions(newOptions);
-            };
-            const handleSubmit = () => {
-                if (!question.trim() || options.some(opt => !opt.trim())) return alert("กรุณากรอกข้อมูลให้ครบถ้วน");
-                onSave({ id: initialData?.id, question, options, correct });
-            };
+        const RichTextEditor = ({ value, onChange, placeholder }) => {
             return (
-                <div className="space-y-6">
-                    <div><label className="block text-sm font-bold text-gray-700 mb-2">โจทย์คำถาม</label><RichTextEditor value={question} onChange={setQuestion} placeholder="พิมพ์คำถาม..." /><div className="mt-2 text-xs text-gray-500">ตัวอย่าง: ใช้ <b>ตัวหนา</b>, <i>ตัวเอียง</i> หรือแทรกรูปภาพ</div></div>
-                    <div><label className="block text-sm font-bold text-gray-700 mb-2">ตัวเลือกคำตอบ (เลือกข้อที่ถูก)</label><div className="space-y-3">{options.map((opt, idx) => (<div key={idx} className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${correct === idx ? 'bg-green-50 border-green-500 shadow-sm' : 'bg-white border-gray-200 hover:border-gray-300'}`} onClick={() => setCorrect(idx)}><div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors ${correct === idx ? 'border-green-600 bg-green-600 text-white' : 'border-gray-300 bg-white'}`}>{correct === idx && <CheckCircle size={14} />}</div><div className="flex-grow"><input className="w-full bg-transparent border-b border-transparent focus:border-indigo-400 outline-none text-sm py-1" placeholder={`ตัวเลือกข้อที่ ${idx + 1}`} value={opt} onChange={(e) => handleOptionChange(idx, e.target.value)} onClick={(e) => e.stopPropagation()} /></div></div>))}</div></div>
-                    <div className="pt-4 flex gap-3 border-t"><button onClick={handleSubmit} disabled={isSaving} className="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg font-bold hover:bg-indigo-700 transition shadow-md flex justify-center items-center gap-2">{isSaving ? <Loader className="animate-spin"/> : <><Save size={18}/> บันทึกข้อมูล</>}</button><button onClick={onCancel} disabled={isSaving} className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-lg font-bold hover:bg-gray-200 transition">ยกเลิก</button></div>
+                <div className="border rounded-lg overflow-hidden focus-within:ring-2 ring-indigo-500 transition">
+                    <div className="bg-gray-50 p-2 border-b flex gap-1">
+                        <span className="text-xs text-gray-400 self-center mr-2">HTML Editor:</span>
+                        <button className="p-1 hover:bg-gray-200 rounded" onClick={()=>onChange(value + '<b></b>')} title="Bold"><Icon name="Bold" size={16}/></button>
+                        <button className="p-1 hover:bg-gray-200 rounded" onClick={()=>onChange(value + '<i></i>')} title="Italic"><Icon name="Italic" size={16}/></button>
+                        <div className="w-px h-4 bg-gray-300 mx-1 self-center"></div>
+                        <button className="p-1 hover:bg-gray-200 rounded" onClick={()=>{const url=prompt("Image URL:"); if(url) onChange(value + `<img src="${url}" class="max-w-full h-auto my-2 rounded"/>`)}} title="Image"><Icon name="Image" size={16}/></button>
+                    </div>
+                    <textarea className="w-full p-3 h-32 text-sm font-mono outline-none resize-y" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder || "รองรับ HTML Tags..."}></textarea>
                 </div>
             );
         };
 
-        // --- 5. Main Component ---
-        const ExamSystem = () => {
-            const [currentView, setCurrentView] = useState('landing');
-            const [activeModal, setActiveModal] = useState(null); 
-            const [modalData, setModalData] = useState(null); 
-            const [isAuthReady, setIsAuthReady] = useState(false);
+        // --- 5. Main Logic ---
+        const ExamApp = () => {
+            const [view, setView] = useState('landing');
             const [user, setUser] = useState(null);
-            const [questionBank, setQuestionBank] = useState([]);
-            const [activeQuestions, setActiveQuestions] = useState([]);
-            const [examResults, setExamResults] = useState([]);
-            const [examSettings, setExamSettings] = useState({ 
-                randomCount: 5,
-                totalTime: 60, // Default 60 mins
-                instructions: `
-<div class="space-y-4 text-gray-700 leading-relaxed">
-  <h4 class="font-bold text-lg text-indigo-700 border-b border-indigo-100 pb-2">ข้อปฏิบัติในการสอบ (Examination Rules)</h4>
-  
-  <div>
-    <strong class="text-gray-900 block mb-1">1. รูปแบบการสอบ:</strong>
-    <ul class="list-disc pl-5 space-y-1">
-      <li>ข้อสอบเป็นแบบปรนัย (เลือกตอบ) 4 ตัวเลือก</li>
-      <li>ระบบจะทำการ<strong>สุ่มลำดับโจทย์และตัวเลือก</strong>สำหรับผู้เข้าสอบแต่ละคน</li>
-      <li>สามารถข้ามข้อและย้อนกลับมาทำได้ภายในเวลาที่กำหนด</li>
-    </ul>
-  </div>
-
-  <div>
-    <strong class="text-gray-900 block mb-1">2. การจับเวลา:</strong>
-    <ul class="list-disc pl-5 space-y-1">
-      <li>การสอบมีเวลาจำกัด (ตรวจสอบเวลาด้านบน)</li>
-      <li>ระบบจะแจ้งเตือนเมื่อเวลาเหลือ 30, 15 และ 5 นาทีสุดท้าย</li>
-      <li>หากหมดเวลา ระบบจะ<strong>ส่งคำตอบอัตโนมัติ</strong>ทันที</li>
-    </ul>
-  </div>
-
-  <div class="bg-red-50 border border-red-200 p-4 rounded-lg">
-    <strong class="text-red-700 block mb-1 flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield-alert"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg> 3. กฎเหล็กป้องกันการทุจริต:</strong>
-    <ul class="list-disc pl-5 space-y-1 text-red-800 text-sm">
-      <li><strong>ห้ามสลับหน้าจอ (Tab Switching)</strong> หรือออกจากหน้าสอบโดยเด็ดขาด</li>
-      <li>ระบบจะตรวจจับการออกจากหน้าจอ หากพบเกิน <strong>3 ครั้ง</strong> ระบบจะยุติการสอบทันที</li>
-      <li>กรุณาปิดโปรแกรมแจ้งเตือนอื่นๆ เพื่อป้องกันการเผลอหลุดจากหน้าจอ</li>
-    </ul>
-  </div>
-
-  <p class="text-center font-bold text-indigo-600 mt-4">--- ขอให้ผู้เข้าสอบทุกท่านโชคดี ---</p>
-</div>
-` 
+            const [loading, setLoading] = useState(true);
+            const [modal, setModal] = useState(null);
+            
+            // Data
+            const [questions, setQuestions] = useState([]);
+            const [results, setResults] = useState([]);
+            const [settings, setSettings] = useState({ 
+                randomCount: 5, totalTime: 60, 
+                instructions: `<ul class="list-disc pl-5"><li>ข้อสอบปรนัย</li><li>ห้ามสลับหน้าจอ</li></ul>` 
             });
-            const [studentInfo, setStudentInfo] = useState({ firstName: '', lastName: '', id: '' });
-            const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-            const [score, setScore] = useState(0);
-            const [timeLeft, setTimeLeft] = useState(0);
-            const [userAnswers, setUserAnswers] = useState([]); 
-            const [teacherPassword, setTeacherPassword] = useState('');
-            const [finalWarnings, setFinalWarnings] = useState(0);
-            const [isSubmitting, setIsSubmitting] = useState(false);
-            const [warningCount, setWarningCount] = useState(0);
-            const [timeWarning, setTimeWarning] = useState(null);
-            const [isImporting, setIsImporting] = useState(false);
-            const [isSavingQuestion, setIsSavingQuestion] = useState(false);
 
+            // Exam Session
+            const [student, setStudent] = useState({ name: '', id: '' });
+            const [activeQs, setActiveQs] = useState([]);
+            const [answers, setAnswers] = useState([]);
+            const [qIndex, setQIndex] = useState(0);
+            const [timer, setTimer] = useState(0);
+            const [warnings, setWarnings] = useState(0);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            // Teacher
+            const [importing, setImporting] = useState(false);
+
+            // Init
             useEffect(() => {
-                auth.signInAnonymously().catch(err => {
-                    console.error("Auth failed", err);
-                    alert("ไม่สามารถเข้าสู่ระบบแบบ Anonymous ได้: " + err.message + "\nกรุณาเปิดใช้ Anonymous Auth ใน Firebase Console");
-                });
-                const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-                    setUser(currentUser);
-                    setIsAuthReady(true);
-                });
-                return () => unsubscribe();
+                auth.signInAnonymously().catch(e => alert("Auth Error: " + e.message));
+                auth.onAuthStateChanged(u => { setUser(u); setLoading(false); });
             }, []);
 
+            // Realtime Data
             useEffect(() => {
-                if (!user) return;
-                const unsubQ = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('questions').orderBy('timestamp', 'asc').onSnapshot(snap => setQuestionBank(snap.docs.map(doc => ({id: doc.id, ...doc.data()}))));
-                const unsubR = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('results').orderBy('timestamp', 'desc').onSnapshot(snap => setExamResults(snap.docs.map(doc => ({id: doc.id, ...doc.data()}))));
-                db.collection('artifacts').doc(appId).collection('public').doc('data').collection('settings').doc(SETTINGS_DOC_ID).get().then(doc => { if(doc.exists) setExamSettings(prev => ({...prev, ...doc.data()})); });
+                if(!user) return;
+                const unsubQ = db.collection(COL_Q).orderBy('timestamp', 'asc').onSnapshot(s => setQuestions(s.docs.map(d => ({id: d.id, ...d.data()}))));
+                const unsubR = db.collection(COL_R).orderBy('timestamp', 'desc').onSnapshot(s => setResults(s.docs.map(d => ({id: d.id, ...d.data()}))));
+                db.collection(COL_S).doc(DOC_S).get().then(d => { if(d.exists) setSettings(prev => ({...prev, ...d.data()})); });
                 return () => { unsubQ(); unsubR(); };
             }, [user]);
 
-            useEffect(() => { if (examSettings.randomCount > questionBank.length && questionBank.length > 0) setExamSettings(prev => ({ ...prev, randomCount: questionBank.length })); }, [questionBank.length]);
-
+            // Sync Settings Limit
             useEffect(() => {
-                let timer;
-                if (currentView === 'quiz' && timeLeft > 0 && !isSubmitting) {
-                    timer = setTimeout(() => setTimeLeft(p => p - 1), 1000);
-                    // Time Warnings
-                    if(timeLeft === 1800) setTimeWarning("เหลือเวลา 30 นาที");
-                    if(timeLeft === 900) setTimeWarning("เหลือเวลา 15 นาที");
-                    if(timeLeft === 300) setTimeWarning("เหลือเวลา 5 นาที");
-                    if(timeWarning) setTimeout(()=>setTimeWarning(null), 5000);
-                } else if (timeLeft === 0 && currentView === 'quiz' && !isSubmitting) {
-                    forceSubmit(userAnswers, finalWarnings);
+                if(questions.length > 0 && settings.randomCount > questions.length) {
+                    setSettings(p => ({...p, randomCount: questions.length}));
                 }
-                return () => clearTimeout(timer);
-            }, [timeLeft, currentView, isSubmitting, timeWarning, userAnswers, finalWarnings]);
+            }, [questions.length]);
 
-            // Anti-Cheat (Simple)
+            // Timer & Anti-Cheat
             useEffect(() => {
-                if (currentView !== 'quiz' || isSubmitting) return;
-                const handleViolation = () => {
-                    setFinalWarnings(p => {
-                        const n = p + 1;
-                        if(n >= 3) { alert("ทำผิดกฎเกินกำหนด (3 ครั้ง)! ระบบยุติการสอบ"); forceSubmit(userAnswers, n); }
-                        else alert(`เตือนครั้งที่ ${n}/3: ห้ามออกจากหน้าจอ!`);
-                        return n;
+                let interval;
+                if(view === 'quiz' && timer > 0 && !isSubmitting) {
+                    interval = setInterval(() => {
+                        setTimer(t => {
+                            if(t <= 1) { clearInterval(interval); handleSubmitExam(answers, warnings, true); return 0; }
+                            return t - 1;
+                        });
+                    }, 1000);
+                }
+                return () => clearInterval(interval);
+            }, [view, timer, isSubmitting, answers, warnings]);
+
+            useEffect(() => {
+                if(view !== 'quiz' || isSubmitting) return;
+                const handleBlur = () => {
+                    setWarnings(w => {
+                        const nw = w + 1;
+                        if(nw >= 3) { alert("ผิดกฎการสอบเกินกำหนด! ระบบจะส่งคำตอบทันที"); handleSubmitExam(answers, nw, true); }
+                        else alert(`เตือนครั้งที่ ${nw}/3: ห้ามออกจากหน้าจอสอบ!`);
+                        return nw;
                     });
                 };
-                window.addEventListener('blur', handleViolation);
-                return () => window.removeEventListener('blur', handleViolation);
-            }, [currentView, isSubmitting, userAnswers]);
+                window.addEventListener('blur', handleBlur);
+                return () => window.removeEventListener('blur', handleBlur);
+            }, [view, isSubmitting, answers]);
 
-            // --- Handlers ---
-            const goHome = () => {
-                setCurrentView('landing');
-                setActiveModal(null);
-                setTeacherPassword('');
-                setStudentInfo({ firstName: '', lastName: '', id: '' });
-                setFinalWarnings(0);
+            // Actions
+            const handleStartExam = () => {
+                if(questions.length === 0) return alert("ยังไม่มีข้อสอบในระบบ");
+                const selected = shuffle(questions).slice(0, settings.randomCount);
+                setActiveQs(selected);
+                setAnswers(Array(selected.length).fill(null));
+                setTimer(settings.totalTime * 60);
+                setWarnings(0);
+                setQIndex(0);
+                setView('quiz');
             };
 
-            const startExam = () => {
-                if(questionBank.length === 0) return alert("ไม่มีข้อสอบ");
-                const shuffled = shuffleArray(questionBank).slice(0, examSettings.randomCount);
-                setActiveQuestions(shuffled);
-                setUserAnswers(Array(shuffled.length).fill(undefined));
-                setTimeLeft((examSettings.totalTime || 60) * 60);
-                setFinalWarnings(0);
-                setScore(0);
-                setCurrentQuestionIndex(0);
-                setCurrentView('quiz');
+            const handleAnswer = (optIdx) => {
+                const newAns = [...answers];
+                newAns[qIndex] = { qId: activeQs[qIndex].id, opt: optIdx, correct: optIdx === activeQs[qIndex].correct };
+                setAnswers(newAns);
             };
 
-            const forceSubmit = (answers, warnings) => {
+            const handleSubmitExam = async (finalAnswers, finalWarnings, force=false) => {
+                if(!force) {
+                    // ใช้ confirm แบบปลอดภัย
+                    if(!window.confirm("ยืนยันการส่งคำตอบหรือไม่?")) return;
+                }
+                
                 setIsSubmitting(true);
-                const finalScore = answers.reduce((acc, ans) => acc + (ans?.isCorrect ? 1 : 0), 0);
-                db.collection('artifacts').doc(appId).collection('public').doc('data').collection('results').add({
-                    studentId: studentInfo.id, firstName: studentInfo.firstName, lastName: studentInfo.lastName, score: finalScore, total: activeQuestions.length, passed: (finalScore / activeQuestions.length) >= 0.6, warnings: warnings, timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                }).then(() => { setScore(finalScore); setCurrentView('result'); }).finally(() => setIsSubmitting(false));
-            };
+                
+                try {
+                    const score = finalAnswers.reduce((acc, a) => acc + (a && a.correct ? 1 : 0), 0);
+                    const safeName = student.name || "Unknown";
+                    const resultData = {
+                        studentId: student.id || "N/A",
+                        firstName: safeName.split(' ')[0] || safeName,
+                        lastName: safeName.split(' ')[1] || '',
+                        score: score,
+                        total: activeQs.length,
+                        passed: activeQs.length > 0 ? (score / activeQs.length) >= 0.6 : false,
+                        warnings: finalWarnings,
+                        timestamp: new Date() // ใช้ Date แทน serverTimestamp เพื่อความเสถียรในบางกรณี
+                    };
 
-            const handleAnswer = (optionIdx) => {
-                const currentQ = activeQuestions[currentQuestionIndex];
-                const isCorrect = optionIdx === currentQ.correct;
-                const newAns = [...userAnswers];
-                newAns[currentQuestionIndex] = { questionId: currentQ.id, selectedOption: optionIdx, isCorrect };
-                setUserAnswers(newAns);
-                setTimeout(() => {
-                    if (currentQuestionIndex < activeQuestions.length - 1) setCurrentQuestionIndex(p => p + 1);
-                    else forceSubmit(newAns, finalWarnings);
-                }, 300);
+                    await db.collection(COL_R).add(resultData);
+                    setView('result');
+                } catch (e) {
+                    console.error("Submit Error:", e);
+                    alert("เกิดข้อผิดพลาดในการส่งคำตอบ: " + e.message);
+                } finally {
+                    setIsSubmitting(false);
+                }
             };
 
             // Teacher Actions
-            const saveQuestion = (q) => {
-                setIsSavingQuestion(true);
-                const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('questions');
-                const d = { question: q.question, options: q.options, correct: q.correct, timestamp: firebase.firestore.FieldValue.serverTimestamp() };
-                if (q.id) {
-                    col.doc(String(q.id)).set(d, {merge:true}).then(()=>{ setActiveModal(null); setIsSavingQuestion(false); });
-                } else { 
-                    const id = String(Date.now()); 
-                    col.doc(id).set({...d, id}).then(()=>{ setActiveModal(null); setIsSavingQuestion(false); }); 
-                }
+            const handleSaveQuestion = (q) => {
+                const data = { 
+                    question: q.question, options: q.options, correct: Number(q.correct), 
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp() 
+                };
+                const ref = q.id ? db.collection(COL_Q).doc(q.id) : db.collection(COL_Q).doc(String(Date.now()));
+                
+                ref.set(data, { merge: true }).then(() => setModal(null));
             };
-            const deleteQuestion = () => db.collection('artifacts').doc(appId).collection('public').doc('data').collection('questions').doc(String(modalData)).delete().then(()=>setActiveModal(null));
-            const saveSettings = () => db.collection('artifacts').doc(appId).collection('public').doc('data').collection('settings').doc(SETTINGS_DOC_ID).set(examSettings).then(()=>alert("บันทึกสำเร็จ"));
-            const handleCSV = (f) => {
-                const r = new FileReader();
-                r.onload = (e) => {
-                    const rows = e.target.result.split('\n').filter(r=>r.trim());
-                    const batch = db.batch(); let c=0;
-                    for(let i=1; i<rows.length; i++) {
-                        const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c=>c.replace(/^"|"$/g, '').trim());
-                        if(cols.length>=6) {
-                            const corr = parseInt(cols[5])-1;
-                            if(!isNaN(corr) && corr>=0) {
-                                const id=String(Date.now()+i);
-                                batch.set(db.collection('artifacts').doc(appId).collection('public').doc('data').collection('questions').doc(id), { question: cols[0], options: [cols[1], cols[2], cols[3], cols[4]], correct: corr, timestamp: firebase.firestore.FieldValue.serverTimestamp(), id });
-                                c++;
+
+            const handleDeleteQuestion = (id) => {
+                if(confirm("ลบข้อสอบนี้?")) db.collection(COL_Q).doc(id).delete();
+            };
+
+            const handleImportCSV = (file) => {
+                setImporting(true);
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const rows = e.target.result.split(/\r\n|\n|\r/).filter(r => r.trim());
+                        const batch = db.batch();
+                        let count = 0;
+                        
+                        for(let i=1; i<rows.length; i++) {
+                            const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.trim().replace(/^"|"$/g, ''));
+                            
+                            if(cols.length >= 6) {
+                                const qText = cols[0];
+                                const opts = [cols[1], cols[2], cols[3], cols[4]];
+                                const rawCorrect = cols[5];
+                                
+                                const match = rawCorrect.match(/\d+/);
+                                let corr = -1;
+                                if(match) corr = parseInt(match[0]) - 1; 
+
+                                if(corr >= 0 && corr < 4 && qText) {
+                                    const id = String(Date.now() + i);
+                                    const ref = db.collection(COL_Q).doc(id);
+                                    batch.set(ref, {
+                                        question: qText,
+                                        options: opts,
+                                        correct: corr,
+                                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                                        id: id
+                                    });
+                                    count++;
+                                }
                             }
                         }
+                        
+                        if(count > 0) {
+                            batch.commit().then(() => alert(`นำเข้าสำเร็จ ${count} ข้อ`));
+                        } else {
+                            alert("ไม่พบข้อมูลที่ถูกต้อง หรือรูปแบบไฟล์ไม่ตรงกับ Template");
+                        }
+                    } catch(err) {
+                        console.error(err);
+                        alert("เกิดข้อผิดพลาดในการอ่านไฟล์");
                     }
-                    if(c>0) batch.commit().then(()=>alert(`นำเข้า ${c} ข้อ`));
+                    setImporting(false);
                 };
-                r.readAsText(f);
-            }
+                reader.readAsText(file);
+            };
 
-            // Define TeacherDashboard Here so it can access props
-            const TeacherDashboard = ({ 
-                questions, examResults, onLogout, 
-                examSettings, setExamSettings, onSaveSettings,
-                onOpenAddModal, onOpenEditModal, onOpenDeleteModal,
-                isImporting, onImport
-            }) => {
-                const [activeTab, setActiveTab] = useState('questions');
-                const fileInputRef = useRef(null);
+            if(loading) return <div className="flex h-screen items-center justify-center"><Icon name="Loader" className="animate-spin mr-2"/> กำลังโหลด...</div>;
 
-                const handleExport = () => {
-                    exportToCSV(examResults, `exam-results-${new Date().toISOString().slice(0,10)}.csv`);
-                };
-
-                return (
-                    <div className="w-full max-w-6xl mx-auto bg-white min-h-[85vh] rounded-2xl shadow-xl flex flex-col mt-4 animate-fade-in">
-                        <div className="bg-indigo-700 text-white p-6 flex justify-between items-center"><h2 className="text-2xl font-bold flex gap-2"><BookOpen/> จัดการข้อสอบ</h2><button onClick={onLogout} className="flex gap-2 items-center bg-indigo-800 px-4 py-2 rounded-lg"><LogOut size={18}/> ออกจากระบบ</button></div>
-                        <div className="flex border-b border-gray-200 overflow-x-auto bg-gray-50">
-                            {['questions', 'results', 'settings'].map(tab => (
-                            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-4 font-semibold flex items-center gap-2 whitespace-nowrap transition-colors capitalize ${activeTab === tab ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>
-                                {tab === 'questions' && <><FileText size={20}/> คลังข้อสอบ ({questions.length})</>}
-                                {tab === 'results' && <><Award size={20}/> ผลคะแนน ({examResults.length})</>}
-                                {tab === 'settings' && <><Settings size={20}/> ตั้งค่า</>}
+            // 1. Landing
+            if(view === 'landing') return (
+                <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4 animate-fade-in">
+                    <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-4xl text-center">
+                        <div className="inline-block p-4 bg-blue-100 rounded-full mb-6"><Icon name="BookOpen" size={48} className="text-blue-600"/></div>
+                        <h1 className="text-4xl font-bold text-gray-800 mb-2">ระบบสอบออนไลน์</h1>
+                        <p className="text-gray-500 mb-10">Online Examination System</p>
+                        
+                        <div className="grid md:grid-cols-2 gap-6">
+                            <button onClick={() => setModal({ type: 'student-login' })} className="p-8 border-2 border-transparent hover:border-blue-500 bg-gray-50 rounded-2xl flex flex-col items-center hover:shadow-lg transition group">
+                                <div className="bg-white p-4 rounded-full shadow-sm mb-4 group-hover:scale-110 transition"><Icon name="User" size={32} className="text-blue-600"/></div>
+                                <h3 className="text-xl font-bold text-gray-700">เข้าสอบ (นักเรียน)</h3>
                             </button>
-                            ))}
+                            <button onClick={() => setModal({ type: 'teacher-login' })} className="p-8 border-2 border-transparent hover:border-indigo-500 bg-gray-50 rounded-2xl flex flex-col items-center hover:shadow-lg transition group">
+                                <div className="bg-white p-4 rounded-full shadow-sm mb-4 group-hover:scale-110 transition"><Icon name="Lock" size={32} className="text-indigo-600"/></div>
+                                <h3 className="text-xl font-bold text-gray-700">จัดการระบบ (ครู)</h3>
+                            </button>
                         </div>
-                        <div className="p-6 overflow-y-auto flex-grow">
-                            {activeTab === 'results' && (
-                            <div>
-                                <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-lg font-bold text-gray-700">รายการผลสอบล่าสุด</h3>
-                                <button onClick={handleExport} disabled={examResults.length === 0} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold shadow-sm transition ${examResults.length === 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}><Download size={18}/> Export to Excel (CSV)</button>
-                                </div>
-                                {examResults.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-20 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl"><Users size={48} className="mb-4 opacity-50"/><p>ยังไม่มีนักเรียนส่งคำตอบเข้ามาในระบบ</p></div>
-                                ) : (
-                                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                                    <div className="overflow-x-auto">
-                                    <table className="w-full text-left border-collapse min-w-[700px]">
-                                        <thead>
-                                        <tr className="bg-gray-50 text-gray-600 text-sm uppercase tracking-wider border-b">
-                                            <th className="p-4 font-semibold">เวลาส่ง</th>
-                                            <th className="p-4 font-semibold">รหัสนักเรียน</th>
-                                            <th className="p-4 font-semibold">ชื่อ-นามสกุล</th>
-                                            <th className="p-4 text-center font-semibold">คะแนน</th>
-                                            <th className="p-4 text-center font-semibold">สถานะ</th>
-                                            <th className="p-4 text-center font-semibold text-red-600">แจ้งเตือนโกง</th>
-                                        </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                        {examResults.map((result, idx) => (
-                                            <tr key={idx} className="hover:bg-blue-50 transition-colors">
-                                            <td className="p-4 text-gray-500 text-sm">{result.timestamp?.seconds ? new Date(result.timestamp.seconds * 1000).toLocaleString() : result.timestamp}</td>
-                                            <td className="p-4 font-mono font-medium text-gray-700">{result.studentId}</td>
-                                            <td className="p-4 font-medium">{result.firstName} {result.lastName}</td>
-                                            <td className="p-4 text-center"><span className="font-bold text-lg text-indigo-600">{result.score}</span><span className="text-gray-400 text-sm">/{result.total}</span></td>
-                                            <td className="p-4 text-center"><span className={`px-3 py-1 rounded-full text-xs font-bold ${result.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{result.passed ? 'ผ่าน' : 'ไม่ผ่าน'}</span></td>
-                                            <td className="p-4 text-center">
-                                                {result.warnings > 0 ? (
-                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-bold"><AlertTriangle size={12}/> {result.warnings} ครั้ง</span>
-                                                ) : <span className="text-gray-400">-</span>}
-                                            </td>
-                                            </tr>
-                                        ))}
-                                        </tbody>
-                                    </table>
-                                    </div>
-                                </div>
-                                )}
+                    </div>
+                    
+                    <Modal isOpen={modal?.type === 'student-login'} onClose={()=>setModal(null)} title="ลงชื่อเข้าสอบ" size="sm">
+                        <div className="space-y-4">
+                            <input className="w-full p-3 border rounded-lg" placeholder="รหัสนักเรียน" value={student.id} onChange={e=>setStudent({...student, id:e.target.value})}/>
+                            <input className="w-full p-3 border rounded-lg" placeholder="ชื่อ-นามสกุล" value={student.name} onChange={e=>setStudent({...student, name:e.target.value})}/>
+                            <button onClick={()=>{ if(student.id && student.name) setView('instruction'); else alert("กรอกให้ครบ"); }} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700">เข้าสู่ระบบ</button>
+                        </div>
+                    </Modal>
+                    <Modal isOpen={modal?.type === 'teacher-login'} onClose={()=>setModal(null)} title="Teacher Login" size="sm">
+                        <div className="space-y-4">
+                            <input type="password" id="pwd" className="w-full p-3 border rounded-lg" placeholder="Password"/>
+                            <button onClick={()=>{ if(document.getElementById('pwd').value === '1234') setView('teacher'); else alert("รหัสผิด"); }} className="w-full bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700">ยืนยัน</button>
+                        </div>
+                    </Modal>
+                </div>
+            );
+
+            // 2. Instruction
+            if(view === 'instruction') return (
+                <div className="max-w-3xl mx-auto my-10 p-6 bg-white rounded-2xl shadow-xl animate-fade-in">
+                    <div className="text-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-800">คำชี้แจงในการสอบ</h2>
+                        <div className="mt-2 text-indigo-600 font-medium">ผู้เข้าสอบ: {student.name} ({student.id})</div>
+                    </div>
+                    <div className="bg-gray-50 p-6 rounded-xl border mb-6 text-gray-700 prose prose-sm max-w-none" dangerouslySetInnerHTML={{__html: settings.instructions}}></div>
+                    <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg mb-6 border border-blue-100">
+                        <div className="flex items-center gap-2 text-blue-800 font-bold"><Icon name="Clock"/> เวลาสอบ: {settings.totalTime} นาที</div>
+                        <div className="flex items-center gap-2 text-blue-800 font-bold"><Icon name="FileText"/> จำนวน: {settings.randomCount} ข้อ</div>
+                    </div>
+                    <div className="flex gap-4">
+                        <button onClick={handleStartExam} className="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 shadow-lg hover:shadow-xl transition">เริ่มทำข้อสอบ</button>
+                        <button onClick={()=>{setView('landing'); setModal(null);}} className="px-6 py-3 bg-gray-200 rounded-xl font-bold hover:bg-gray-300">ยกเลิก</button>
+                    </div>
+                </div>
+            );
+
+            // 3. Quiz Interface
+            if(view === 'quiz') {
+                const q = activeQs[qIndex];
+                const answeredCount = answers.filter(a => a !== null).length;
+                return (
+                    <div className="max-w-4xl mx-auto my-6 p-4 animate-fade-in">
+                        <div className="bg-white rounded-2xl shadow-sm p-4 mb-6 flex justify-between items-center sticky top-2 z-10 border border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-indigo-100 p-2 rounded-full text-indigo-600 font-bold">{qIndex + 1} / {activeQs.length}</div>
+                                <div className="text-sm hidden sm:block text-gray-500">ทำแล้ว {answeredCount} ข้อ</div>
                             </div>
-                            )}
-                            {activeTab === 'questions' && (
-                            <div className="space-y-4">
-                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3">
-                                <p className="text-gray-500 text-sm font-medium">คลังข้อสอบทั้งหมด ({questions.length} ข้อ)</p>
-                                <div className="flex gap-2">
-                                    <button onClick={downloadTemplate} className="bg-white text-green-600 border border-green-600 px-3 py-2 rounded-lg hover:bg-green-50 text-sm font-bold shadow-sm flex items-center gap-2 transition"><FileSpreadsheet size={18}/> โหลด Template</button>
-                                    <button onClick={() => fileInputRef.current?.click()} disabled={isImporting} className="bg-white text-blue-600 border border-blue-600 px-3 py-2 rounded-lg hover:bg-blue-50 text-sm font-bold shadow-sm flex items-center gap-2 transition">
-                                    {isImporting ? <Loader className="animate-spin" size={18}/> : <Upload size={18}/>} นำเข้า CSV
-                                    </button>
-                                    <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={(e)=>handleCSV(e.target.files[0])}/>
-                                    <button onClick={onOpenAddModal} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 text-sm font-bold shadow-md flex items-center gap-2 transition"><PlusCircle size={18}/> เพิ่มข้อสอบ</button>
-                                </div>
-                                </div>
-                                {questions.length === 0 && <div className="text-center py-10 text-gray-400">ยังไม่มีข้อสอบในระบบ</div>}
-                                {questions.map((q, i)=>(
-                                <div key={q.id} className="border p-4 rounded-xl flex justify-between items-start hover:shadow-md transition">
-                                    <div>
-                                        <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded font-bold mr-2">Q{i+1}</span>
-                                        <div className="font-medium inline-block align-top" dangerouslySetInnerHTML={{__html: q.question}}></div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={()=>{onOpenEditModal(q);}}><Edit size={18} className="text-gray-400 hover:text-indigo-600"/></button>
-                                        <button onClick={()=>{onOpenDeleteModal(q.id);}}><Trash2 size={18} className="text-gray-400 hover:text-red-600"/></button>
-                                    </div>
-                                </div>
-                                ))}
+                            <div className={`flex items-center gap-2 px-4 py-2 rounded-full font-mono font-bold text-lg ${timer < 300 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-700'}`}>
+                                <Icon name="Clock" size={20}/> {formatTime(timer)}
                             </div>
-                            )}
-                            {activeTab === 'settings' && (
-                            <div className="max-w-2xl mx-auto mt-8 animate-fade-in">
-                                <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-lg">
-                                <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 pb-4 border-b"><Settings size={24} className="text-indigo-600"/> ตั้งค่าการสอบ</h3>
-                                
-                                {/* 1. Total Exam Time */}
-                                <div className="mb-8">
-                                    <label className="block text-gray-700 font-bold mb-3">เวลาในการสอบทั้งหมด (นาที)</label>
-                                    <div className="bg-indigo-50 p-6 rounded-xl flex items-center gap-6">
-                                        <div className="flex-grow">
-                                        <input type="number" min="1" max="180" className="w-full p-3 border rounded-lg" value={examSettings.totalTime || 60} onChange={(e) => setExamSettings({...examSettings, totalTime: Number(e.target.value)})} />
-                                        <div className="text-xs text-gray-500 mt-2">ระบุเวลาเป็นนาที (ระบบจะเตือนเมื่อเหลือ 30, 15, 5 นาที)</div>
+                            <button 
+                                onClick={()=>handleSubmitExam(answers, warnings)} 
+                                disabled={isSubmitting}
+                                className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                            >
+                                {isSubmitting ? <><Icon name="Loader" className="animate-spin"/> กำลังส่ง...</> : "ส่งคำตอบ"}
+                            </button>
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-lg p-8 mb-6 min-h-[200px]">
+                            <div className="text-xl text-gray-800 leading-relaxed font-medium" dangerouslySetInnerHTML={{__html: q.question}}></div>
+                        </div>
+
+                        <div className="grid gap-3">
+                            {q.options.map((opt, idx) => {
+                                const isSelected = answers[qIndex]?.opt === idx;
+                                return (
+                                    <button key={idx} onClick={() => handleAnswer(idx)} className={`p-4 rounded-xl border-2 text-left transition flex items-center gap-4 group ${isSelected ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}`}>
+                                        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-sm ${isSelected ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-300 group-hover:border-blue-400'}`}>
+                                            {['A','B','C','D'][idx]}
                                         </div>
-                                        <div className="flex-shrink-0 flex flex-col items-center"><div className="w-20 h-14 flex items-center justify-center bg-white text-indigo-700 font-black rounded-xl text-2xl border-2 border-indigo-100 shadow-sm">{examSettings.totalTime || 60}</div><span className="text-xs mt-1">นาที</span></div>
-                                    </div>
-                                </div>
-
-                                {/* 2. Random Count Setting */}
-                                <div className="mb-8">
-                                    <label className="block text-gray-700 font-bold mb-3">จำนวนข้อที่สุ่มมาให้ทำ</label>
-                                    <div className="bg-indigo-50 p-6 rounded-xl flex items-center gap-6">
-                                        <div className="flex-grow">
-                                        <input type="range" min="1" max={Math.max(questions.length, 1)} value={examSettings.randomCount} onChange={(e) => setExamSettings({...examSettings, randomCount: Number(e.target.value)})} className="w-full h-2 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                                        <div className="flex justify-between text-xs text-indigo-400 mt-2 font-medium"><span>1 ข้อ</span><span>{questions.length} ข้อ (Max)</span></div>
-                                        </div>
-                                        <div className="flex-shrink-0 flex flex-col items-center"><div className="w-16 h-14 flex items-center justify-center bg-white text-indigo-700 font-black rounded-xl text-2xl border-2 border-indigo-100 shadow-sm">{examSettings.randomCount}</div><span className="text-xs mt-1">ข้อ</span></div>
-                                    </div>
-                                </div>
-
-                                {/* 3. Instructions Editor Setting */}
-                                <div className="mb-8">
-                                    <label className="block text-gray-700 font-bold mb-3">แก้ไขคำชี้แจง (Exam Instructions)</label>
-                                    <RichTextEditor 
-                                        value={examSettings.instructions || ''} 
-                                        onChange={(val) => setExamSettings({...examSettings, instructions: val})}
-                                        placeholder="พิมพ์คำชี้แจง กฎระเบียบ หรือข้อตกลงในการสอบที่นี่..."
-                                    />
-                                    <div className="mt-2 text-xs text-gray-400">สามารถใส่รูปภาพ หรือจัดรูปแบบข้อความได้</div>
-                                </div>
-
-                                {/* Save Button */}
-                                <div className="flex justify-end pt-4 border-t">
-                                    <button 
-                                        onClick={onSaveSettings}
-                                        className="bg-green-600 text-white px-6 py-2.5 rounded-lg font-bold shadow-md hover:bg-green-700 transition flex items-center gap-2"
-                                    >
-                                        <Save size={18} /> บันทึกการตั้งค่า
+                                        <div className="text-lg text-gray-700">{opt}</div>
                                     </button>
-                                </div>
-                                </div>
-                            </div>
-                            )}
+                                );
+                            })}
+                        </div>
+
+                        <div className="flex justify-between mt-8">
+                            <button disabled={qIndex === 0} onClick={() => setQIndex(i => i - 1)} className="px-6 py-3 bg-white border border-gray-300 rounded-xl font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50">ข้อก่อนหน้า</button>
+                            <button disabled={qIndex === activeQs.length - 1} onClick={() => setQIndex(i => i + 1)} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50">ข้อถัดไป</button>
                         </div>
                     </div>
                 );
+            }
+
+            // 4. Result
+            if(view === 'result') {
+                const score = results.find(r => r.studentId === student.id && Math.abs(r.timestamp?.seconds - Date.now()/1000) < 60)?.score || 0;
+                return (
+                    <div className="flex flex-col items-center justify-center min-h-screen p-4 animate-fade-in">
+                        <div className="bg-white p-12 rounded-3xl shadow-2xl text-center max-w-lg w-full">
+                            <div className="inline-block p-6 bg-green-100 rounded-full mb-6"><Icon name="Award" size={64} className="text-green-600"/></div>
+                            <h2 className="text-3xl font-bold text-gray-800 mb-2">ส่งคำตอบเรียบร้อย!</h2>
+                            <p className="text-gray-500 mb-8">ระบบได้บันทึกคะแนนของคุณแล้ว</p>
+                            <button onClick={()=>{setView('landing'); setModal(null);}} className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-black transition">กลับสู่หน้าหลัก</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            // 5. Teacher Dashboard
+            if(view === 'teacher') return (
+                <div className="max-w-6xl mx-auto my-6 bg-white min-h-[90vh] rounded-2xl shadow-xl flex flex-col animate-fade-in overflow-hidden">
+                    <div className="bg-slate-800 text-white p-6 flex justify-between items-center sticky top-0 z-20">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-white/10 p-2 rounded-lg"><Icon name="Settings" size={24}/></div>
+                            <div><h2 className="font-bold text-xl">ระบบจัดการข้อสอบ</h2><p className="text-xs text-slate-400">Admin Panel</p></div>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => {
+                                const headers = ['Timestamp,Student ID,Name,Score,Total,Passed,Warnings'];
+                                const csv = headers.concat(results.map(r => 
+                                    `"${r.timestamp?.seconds ? new Date(r.timestamp.seconds*1000).toLocaleString() : ''}","${r.studentId}","${r.firstName} ${r.lastName}",${r.score},${r.total},${r.passed?'Pass':'Fail'},${r.warnings||0}`
+                                )).join('\n');
+                                const link = document.createElement('a');
+                                link.href = 'data:text/csv;charset=utf-8,%EF%BB%BF' + encodeURI(csv);
+                                link.download = 'exam_results.csv';
+                                link.click();
+                            }} className="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-bold text-sm flex gap-2 items-center"><Icon name="Download" size={16}/> Export คะแนน</button>
+                            <button onClick={()=>setView('landing')} className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg font-bold text-sm">ออกจากระบบ</button>
+                        </div>
+                    </div>
+
+                    <div className="p-6 overflow-y-auto flex-grow bg-slate-50">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border">
+                                <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><Icon name="Clock" size={18}/> ตั้งค่าเวลาสอบ</h3>
+                                <div className="flex items-center gap-2">
+                                    <input type="number" className="border p-2 rounded w-20 text-center font-bold text-lg" value={settings.totalTime} onChange={e=>setSettings({...settings, totalTime: Number(e.target.value)})}/>
+                                    <span className="text-gray-500">นาที</span>
+                                    <button onClick={()=>db.collection(COL_S).doc(DOC_S).set(settings)} className="ml-auto text-blue-600 text-sm font-bold hover:underline">บันทึก</button>
+                                </div>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm border">
+                                <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><Icon name="FileText" size={18}/> จำนวนข้อที่สุ่ม</h3>
+                                <div className="flex items-center gap-2">
+                                    <input type="number" className="border p-2 rounded w-20 text-center font-bold text-lg" value={settings.randomCount} onChange={e=>setSettings({...settings, randomCount: Number(e.target.value)})}/>
+                                    <span className="text-gray-500">จาก {questions.length} ข้อ</span>
+                                    <button onClick={()=>db.collection(COL_S).doc(DOC_S).set(settings)} className="ml-auto text-blue-600 text-sm font-bold hover:underline">บันทึก</button>
+                                </div>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm border flex flex-col justify-center items-center gap-3">
+                                <button onClick={()=>setModal({type:'instruction-edit'})} className="w-full py-2 border-2 border-indigo-100 text-indigo-600 rounded-lg font-bold hover:bg-indigo-50 transition">แก้ไขคำชี้แจง</button>
+                                <div className="flex gap-2 w-full">
+                                    <button onClick={()=>{
+                                        const csvContent = "data:text/csv;charset=utf-8,\uFEFFQuestion,Option A,Option B,Option C,Option D,Correct Answer (1-4)\n1+1=?,1,2,3,4,2\nเมืองหลวงไทย?,เชียงใหม่,กทม,ภูเก็ต,ระยอง,2";
+                                        const link = document.createElement("a"); link.href = encodeURI(csvContent); link.download = "template.csv"; link.click();
+                                    }} className="flex-1 py-2 text-xs border border-green-200 text-green-700 rounded hover:bg-green-50 text-center font-bold">Template CSV</button>
+                                    <label className="flex-1 py-2 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 text-center font-bold cursor-pointer">
+                                        {importing ? 'Importing...' : 'นำเข้า CSV'}
+                                        <input type="file" accept=".csv" className="hidden" onChange={e=>handleImportCSV(e.target.files[0])} disabled={importing}/>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-xl text-gray-800">คลังข้อสอบ ({questions.length})</h3>
+                            <button onClick={()=>setModal({type:'question-form', data:{}})} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-blue-700 flex items-center gap-2"><Icon name="PlusCircle" size={18}/> เพิ่มข้อสอบ</button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            {questions.map((q, i) => (
+                                <div key={q.id} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition flex gap-4">
+                                    <div className="bg-gray-100 w-10 h-10 rounded-full flex items-center justify-center font-bold text-gray-500 shrink-0">{i+1}</div>
+                                    <div className="flex-grow">
+                                        <div className="font-medium text-lg text-gray-800 mb-2" dangerouslySetInnerHTML={{__html: q.question}}></div>
+                                        <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-gray-600">
+                                            {q.options.map((o, idx) => (
+                                                <div key={idx} className={`flex items-center gap-2 ${idx===q.correct ? 'text-green-600 font-bold':''}`}>
+                                                    <div className={`w-2 h-2 rounded-full ${idx===q.correct ? 'bg-green-500':'bg-gray-300'}`}></div> {o}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-2 border-l pl-4 justify-center">
+                                        <button onClick={()=>setModal({type:'question-form', data:q})} className="text-gray-400 hover:text-indigo-600 p-2 hover:bg-indigo-50 rounded"><Icon name="Edit" size={18}/></button>
+                                        <button onClick={()=>handleDeleteQuestion(q.id)} className="text-gray-400 hover:text-red-600 p-2 hover:bg-red-50 rounded"><Icon name="Trash2" size={18}/></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <Modal isOpen={modal?.type === 'question-form'} onClose={()=>setModal(null)} title={modal?.data?.id ? "แก้ไขข้อสอบ" : "เพิ่มข้อสอบ"} size="lg">
+                        {modal?.type === 'question-form' && (
+                            <QuestionForm initialData={modal.data} onSave={handleSaveQuestion} onCancel={()=>setModal(null)}/>
+                        )}
+                    </Modal>
+                    
+                    <Modal isOpen={modal?.type === 'instruction-edit'} onClose={()=>setModal(null)} title="แก้ไขคำชี้แจง" size="lg">
+                        <div className="space-y-4">
+                            <RichTextEditor value={settings.instructions} onChange={v=>setSettings({...settings, instructions: v})} />
+                            <div className="flex justify-end gap-2 pt-4">
+                                <button onClick={()=>setModal(null)} className="px-4 py-2 bg-gray-200 rounded-lg font-bold">ยกเลิก</button>
+                                <button onClick={()=>{db.collection(COL_S).doc(DOC_S).set(settings); setModal(null);}} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">บันทึก</button>
+                            </div>
+                        </div>
+                    </Modal>
+                </div>
+            );
+
+            return null; // Should not reach here
+        };
+
+        // --- 6. Question Form Component ---
+        const QuestionForm = ({ initialData, onSave, onCancel }) => {
+            const [q, setQ] = useState(initialData?.question || '');
+            const [opts, setOpts] = useState(initialData?.options || ['','','','']);
+            const [correct, setCorrect] = useState(initialData?.correct !== undefined ? initialData.correct : 0);
+
+            const handleOptChange = (i, val) => {
+                const newOpts = [...opts]; newOpts[i] = val; setOpts(newOpts);
             };
 
-            // Render Views
-            if (currentView === 'landing') return (
-                <div className="flex flex-col items-center justify-center min-h-[80vh] p-4 animate-fade-in">
-                    <div className="text-center mb-10"><BookOpen size={64} className="text-blue-600 inline-block mb-4"/><h1 className="text-4xl font-extrabold text-gray-800">ระบบสอบออนไลน์</h1><p className="text-xl text-gray-500">Online Exam System</p></div>
-                    {!isAuthReady ? <div className="text-gray-500"><Loader className="animate-spin inline"/> กำลังเชื่อมต่อ...</div> : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl">
-                            <button onClick={()=>setActiveModal('student-login')} className="flex flex-col items-center p-8 bg-white rounded-2xl shadow-md hover:shadow-xl transition"><User size={40} className="text-blue-600 mb-4"/><h2 className="text-xl font-bold">สำหรับนักเรียน</h2></button>
-                            <button onClick={()=>setActiveModal('teacher-login')} className="flex flex-col items-center p-8 bg-white rounded-2xl shadow-md hover:shadow-xl transition"><Users size={40} className="text-indigo-600 mb-4"/><h2 className="text-xl font-bold">สำหรับอาจารย์</h2></button>
+            return (
+                <div className="space-y-6">
+                    <div>
+                        <label className="font-bold block mb-2 text-gray-700">โจทย์คำถาม</label>
+                        <RichTextEditor value={q} onChange={setQ} placeholder="ใส่โจทย์ที่นี่..." />
+                    </div>
+                    <div>
+                        <label className="font-bold block mb-2 text-gray-700">ตัวเลือก (คลิกวงกลมหน้าข้อที่ถูก)</label>
+                        <div className="space-y-3">
+                            {opts.map((opt, i) => (
+                                <div key={i} className={`flex items-center gap-3 p-3 rounded-lg border transition cursor-pointer ${correct===i ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'}`} onClick={()=>setCorrect(i)}>
+                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${correct===i ? 'border-green-600 bg-green-600 text-white' : 'border-gray-300 bg-white'}`}>
+                                        {correct===i && <Icon name="CheckCircle" size={14}/>}
+                                    </div>
+                                    <input className="flex-grow bg-transparent outline-none border-b border-transparent focus:border-indigo-400 py-1" value={opt} onChange={e=>handleOptChange(i, e.target.value)} placeholder={`ตัวเลือก ${i+1}`} onClick={e=>e.stopPropagation()}/>
+                                </div>
+                            ))}
                         </div>
-                    )}
-                    <Modal isOpen={activeModal==='student-login'} onClose={()=>setActiveModal(null)} title="ลงชื่อเข้าสอบ"><StudentLoginForm studentInfo={studentInfo} setStudentInfo={setStudentInfo} onLogin={()=>{if(studentInfo.firstName && studentInfo.id){setActiveModal(null);setCurrentView('instruction');}else alert("กรอกข้อมูลให้ครบ");}}/></Modal>
-                    <Modal isOpen={activeModal==='teacher-login'} onClose={()=>setActiveModal(null)} title="อาจารย์"><TeacherLoginForm password={teacherPassword} setPassword={setTeacherPassword} onLogin={()=>{if(teacherPassword==='Nu65411597'){setActiveModal(null);setCurrentView('teacher-dashboard');}else alert("รหัสผิด");}}/></Modal>
-                </div>
-            );
-
-            if (currentView === 'instruction') return (
-                <div className="max-w-2xl mx-auto my-8 bg-white rounded-2xl shadow-xl overflow-hidden animate-fade-in">
-                    <div className="bg-blue-600 p-6 text-white text-center"><h2 className="text-2xl font-bold">คำชี้แจง</h2></div>
-                    <div className="p-8 space-y-6">
-                        <div className="flex gap-4 p-4 bg-blue-50 rounded-xl items-center"><User className="text-blue-600"/><div><h3 className="font-bold">{studentInfo.firstName}</h3><p>{studentInfo.id}</p></div></div>
-                        <div className="prose prose-sm max-w-none text-gray-600" dangerouslySetInnerHTML={{ __html: examSettings.instructions }} />
-                        <div className="flex items-center gap-2 text-indigo-600 font-bold"><Clock /> เวลาสอบ: {examSettings.totalTime || 60} นาที</div>
-                        <div className="flex gap-4 pt-4"><button onClick={startExam} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">เริ่มทำข้อสอบ</button><button onClick={()=>setCurrentView('landing')} className="px-6 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">ยกเลิก</button></div>
+                    </div>
+                    <div className="pt-4 border-t flex justify-end gap-3">
+                        <button onClick={onCancel} className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold text-gray-600 transition">ยกเลิก</button>
+                        <button onClick={()=>onSave({ id: initialData?.id, question: q, options: opts, correct })} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold text-white shadow-md transition flex items-center gap-2"><Icon name="Save" size={18}/> บันทึก</button>
                     </div>
                 </div>
             );
-
-            if (currentView === 'quiz') return (
-                <QuizInterface 
-                    questions={activeQuestions} 
-                    currentQuestionIndex={currentQuestionIndex} 
-                    timeLeft={timeLeft} 
-                    studentInfo={studentInfo} 
-                    userAnswers={userAnswers} 
-                    isAnswered={false} 
-                    handleAnswer={handleAnswer} 
-                    isSubmitting={isSubmitting} 
-                    onFinishExam={forceSubmit} 
-                />
-            );
-
-            if (currentView === 'result') return (
-                <div className="max-w-lg mx-auto p-4 text-center mt-10 animate-fade-in">
-                    <div className="bg-white p-10 rounded-3xl shadow-2xl relative overflow-hidden">
-                        <Award size={64} className="mx-auto mb-4 text-gray-700 relative z-10"/>
-                        <h2 className="text-3xl font-bold mb-2 relative z-10">ส่งคำตอบเรียบร้อย</h2>
-                        <div className="text-6xl font-black my-6 relative z-10">{score} <span className="text-2xl text-gray-400">/ {activeQuestions.length}</span></div>
-                        <button onClick={goHome} className="w-full bg-gray-800 text-white py-3 rounded-xl font-bold relative z-10">กลับหน้าหลัก</button>
-                    </div>
-                </div>
-            );
-
-            if (currentView === 'teacher-dashboard') return (
-                <>
-                    <TeacherDashboard 
-                        questions={questionBank} 
-                        examResults={examResults} 
-                        onLogout={goHome} 
-                        examSettings={examSettings} 
-                        setExamSettings={setExamSettings} 
-                        onSaveSettings={saveSettings} 
-                        onOpenAddModal={() => { setModalData({}); setActiveModal('question-form'); }} 
-                        onOpenEditModal={(q) => { setModalData(q); setActiveModal('question-form'); }} 
-                        onOpenDeleteModal={(id) => { setModalData(id); setActiveModal('delete-confirm'); }} 
-                        isImporting={isImporting} 
-                        onImport={handleCSV} 
-                    />
-                    <Modal isOpen={activeModal==='question-form'} onClose={()=>setActiveModal(null)} title={modalData && modalData.id?"แก้ไข":"เพิ่ม"} size="lg"><QuestionForm initialData={modalData} onSave={saveQuestion} onCancel={()=>setActiveModal(null)} isSaving={isSavingQuestion}/></Modal>
-                    <Modal isOpen={activeModal==='delete-confirm'} onClose={()=>setActiveModal(null)} title="ลบ"><div className="text-center p-4"><p>ยืนยันลบ?</p><div className="flex gap-4 mt-4 justify-center"><button onClick={deleteQuestion} className="bg-red-600 text-white px-6 py-2 rounded-lg">ลบ</button><button onClick={()=>setActiveModal(null)} className="bg-gray-200 px-6 py-2 rounded-lg">ยกเลิก</button></div></div></Modal>
-                </>
-            );
-
-            return <div>Loading...</div>;
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<ExamSystem />);
+        root.render(<ExamApp />);
     </script>
 </body>
 </html>
