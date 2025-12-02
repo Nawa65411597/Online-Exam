@@ -27,8 +27,8 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 4. Lucide Icons (แก้ไขลิงก์ให้ถูกต้อง) -->
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <!-- 4. Lucide Icons (Latest) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
     
     <!-- 5. Firebase (Compat) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -43,6 +43,20 @@
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         .animate-fade-in { animation: fade-in 0.3s ease-out; }
+        
+        #error-log {
+            display: none;
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 8px;
+            border: 1px solid #f87171;
+            font-family: monospace;
+            white-space: pre-wrap;
+            z-index: 9999;
+            position: relative;
+        }
     </style>
 </head>
 <body>
@@ -51,17 +65,29 @@
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #6b7280;">
             <svg class="animate-spin" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
             <p style="margin-top: 1rem; font-size: 1.25rem;">กำลังโหลดระบบ... (Loading)</p>
-            <p style="margin-top: 0.5rem; font-size: 0.875rem;">หากค้างหน้านี้นานเกินไป โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ต</p>
+            <p style="margin-top: 0.5rem; font-size: 0.875rem;">หากค้างหน้านี้นานเกิน 10 วินาที โปรดตรวจสอบ Console (F12)</p>
         </div>
     </div>
 
-    <script type="text/babel">
-        // Global Error Handler for React
-        window.onerror = function(message, source, lineno, colno, error) {
-            // ไม่แสดง Error หน้าจอขาว แต่ Log ลง Console แทน เพื่อให้แอปพยายามรันต่อได้ถ้าไม่ร้ายแรง
-            console.error("System Error:", message);
-        };
+    <!-- พื้นที่แสดง Error กรณีโหลดไม่ขึ้น -->
+    <div id="error-log"></div>
 
+    <script>
+        // Error Handler
+        window.onerror = function(message, source, lineno, colno, error) {
+            const errorDiv = document.getElementById('error-log');
+            const rootDiv = document.getElementById('root');
+            if (errorDiv && rootDiv) {
+                rootDiv.style.display = 'none';
+                errorDiv.style.display = 'block';
+                errorDiv.innerHTML = `<strong>เกิดข้อผิดพลาด (System Error):</strong>\n\n${message}\n\nLocation: ${source}:${lineno}`;
+            }
+            console.error("Critical Error:", message, error);
+        };
+    </script>
+
+    <!-- Main Application Code -->
+    <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
         // --- 1. Firebase Config ---
@@ -75,9 +101,14 @@
             measurementId: "G-75674HXF78"
         };
 
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
+        try {
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+        } catch (e) {
+            console.error("Firebase Init Error:", e);
         }
+        
         const auth = firebase.auth();
         const db = firebase.firestore();
 
@@ -87,13 +118,29 @@
         const SETTINGS_COLLECTION = `artifacts/${appId}/public/data/settings`; 
         const SETTINGS_DOC_ID = 'config';
 
-        // --- 2. Components ---
+        // --- 2. Components (Fixed Icon Rendering) ---
         const Icon = ({ name, size = 24, className = "" }) => {
             const spanRef = useRef(null);
             useEffect(() => {
                 if (spanRef.current && window.lucide && window.lucide.icons && window.lucide.icons[name]) {
-                    const svg = window.lucide.icons[name].toSvg({ class: className, width: size, height: size });
-                    spanRef.current.innerHTML = svg;
+                    // Clear previous content
+                    spanRef.current.innerHTML = '';
+                    const iconDef = window.lucide.icons[name];
+
+                    // FIX: Support both createElement (New) and toSvg (Old)
+                    if (typeof window.lucide.createElement === 'function') {
+                        // New Lucide API
+                        const svg = window.lucide.createElement(iconDef);
+                        svg.setAttribute('width', size);
+                        svg.setAttribute('height', size);
+                        // Merge classes
+                        const existingClass = svg.getAttribute('class') || '';
+                        svg.setAttribute('class', `${existingClass} ${className}`.trim());
+                        spanRef.current.appendChild(svg);
+                    } else if (typeof iconDef.toSvg === 'function') {
+                        // Old Lucide API fallback
+                        spanRef.current.innerHTML = iconDef.toSvg({ class: className, width: size, height: size });
+                    }
                 }
             }, [name, size, className]);
             return <span ref={spanRef} style={{ display: 'inline-flex', verticalAlign: 'middle' }}></span>;
@@ -302,7 +349,10 @@
             const [isImporting, setIsImporting] = useState(false);
 
             useEffect(() => {
-                auth.signInAnonymously().catch(err => console.error("Auth failed", err));
+                auth.signInAnonymously().catch(err => {
+                    console.error("Auth failed", err);
+                    alert("ไม่สามารถเข้าสู่ระบบแบบ Anonymous ได้: " + err.message + "\nกรุณาเปิดใช้ Anonymous Auth ใน Firebase Console");
+                });
                 const unsubscribe = auth.onAuthStateChanged((currentUser) => {
                     setUser(currentUser);
                     setIsAuthReady(true);
@@ -478,21 +528,7 @@
                         </div>
                         <div className="space-y-4">
                             <button onClick={()=>{setModalData({}); setActiveModal('question-form');}} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 mb-4 shadow"><PlusCircle size={18}/> เพิ่มข้อสอบ</button>
-                            
-                            {/* **จุดที่แก้ไข: เปลี่ยน span เป็น div เพื่อป้องกัน Error removeChild** */}
-                            {questionBank.map((q, i)=>(
-                                <div key={q.id} className="border p-4 rounded-xl flex justify-between items-start hover:shadow-md transition">
-                                    <div>
-                                        <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded font-bold mr-2">Q{i+1}</span>
-                                        <!-- แก้จาก span เป็น div -->
-                                        <div className="font-medium inline-block align-top" dangerouslySetInnerHTML={{__html: q.question}}></div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={()=>{setModalData(q); setActiveModal('question-form');}}><Edit size={18} className="text-gray-400 hover:text-indigo-600"/></button>
-                                        <button onClick={()=>{setModalData(q.id); setActiveModal('delete-confirm');}}><Trash2 size={18} className="text-gray-400 hover:text-red-600"/></button>
-                                    </div>
-                                </div>
-                            ))}
+                            {questionBank.map((q, i)=>(<div key={q.id} className="border p-4 rounded-xl flex justify-between items-start hover:shadow-md transition"><div><span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded font-bold mr-2">Q{i+1}</span><div className="font-medium inline-block align-top" dangerouslySetInnerHTML={{__html: q.question}}></div></div><div className="flex gap-2"><button onClick={()=>{setModalData(q); setActiveModal('question-form');}}><Edit size={18} className="text-gray-400 hover:text-indigo-600"/></button><button onClick={()=>{setModalData(q.id); setActiveModal('delete-confirm');}}><Trash2 size={18} className="text-gray-400 hover:text-red-600"/></button></div></div>))}
                         </div>
                     </div>
                     <Modal isOpen={activeModal==='question-form'} onClose={()=>setActiveModal(null)} title={modalData.id?"แก้ไข":"เพิ่ม"} size="lg"><QuestionForm initialData={modalData} onSave={saveQuestion} onCancel={()=>setActiveModal(null)} isSaving={isSavingQuestion}/></Modal>
