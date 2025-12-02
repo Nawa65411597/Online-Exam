@@ -292,7 +292,7 @@
 
         const TeacherLoginForm = ({ password, setPassword, onLogin }) => (
             <div className="space-y-4">
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">รหัสผ่าน</label><input type="password" className="w-full p-3 border rounded-lg" placeholder="Hint: 1234" value={password} onChange={e => setPassword(e.target.value)} /></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">รหัสผ่าน</label><input type="password" className="w-full p-3 border rounded-lg" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} /></div>
                 <button onClick={onLogin} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold mt-2 hover:bg-indigo-700">ยืนยัน</button>
             </div>
         );
@@ -524,7 +524,7 @@
 
                 return (
                     <div className="w-full max-w-6xl mx-auto bg-white min-h-[85vh] rounded-2xl shadow-xl flex flex-col mt-4 animate-fade-in">
-                        <div className="bg-indigo-700 text-white p-6 flex justify-between items-center"><h2 className="text-2xl font-bold flex gap-2"><BookOpen/> จัดการข้อสอบ</h2><button onClick={onLogout} className="flex gap-2 items-center bg-indigo-800 px-4 py-2 rounded-lg"><LogOut size={18}/> ออก</button></div>
+                        <div className="bg-indigo-700 text-white p-6 flex justify-between items-center"><h2 className="text-2xl font-bold flex gap-2"><BookOpen/> จัดการข้อสอบ</h2><button onClick={onLogout} className="flex gap-2 items-center bg-indigo-800 px-4 py-2 rounded-lg"><LogOut size={18}/> ออกจากระบบ</button></div>
                         <div className="flex border-b border-gray-200 overflow-x-auto bg-gray-50">
                             {['questions', 'results', 'settings'].map(tab => (
                             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-4 font-semibold flex items-center gap-2 whitespace-nowrap transition-colors capitalize ${activeTab === tab ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>
@@ -675,7 +675,7 @@
                         </div>
                     )}
                     <Modal isOpen={activeModal==='student-login'} onClose={()=>setActiveModal(null)} title="ลงชื่อเข้าสอบ"><StudentLoginForm studentInfo={studentInfo} setStudentInfo={setStudentInfo} onLogin={()=>{if(studentInfo.firstName && studentInfo.id){setActiveModal(null);setCurrentView('instruction');}else alert("กรอกข้อมูลให้ครบ");}}/></Modal>
-                    <Modal isOpen={activeModal==='teacher-login'} onClose={()=>setActiveModal(null)} title="อาจารย์"><TeacherLoginForm password={teacherPassword} setPassword={setTeacherPassword} onLogin={()=>{if(teacherPassword==='1234'){setActiveModal(null);setCurrentView('teacher-dashboard');}else alert("รหัสผิด");}}/></Modal>
+                    <Modal isOpen={activeModal==='teacher-login'} onClose={()=>setActiveModal(null)} title="อาจารย์"><TeacherLoginForm password={teacherPassword} setPassword={setTeacherPassword} onLogin={()=>{if(teacherPassword==='Nu65411597'){setActiveModal(null);setCurrentView('teacher-dashboard');}else alert("รหัสผิด");}}/></Modal>
                 </div>
             );
 
