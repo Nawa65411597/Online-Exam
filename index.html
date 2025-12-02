@@ -1,0 +1,922 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Clock, CheckCircle, XCircle, ChevronRight, RefreshCw, Award, 
+  User, BookOpen, Users, Lock, Edit, Save, Trash2, LogOut, FileText, Settings, X, 
+  PlusCircle, AlertTriangle, Download, Info, Bold, Italic, Underline, Image as ImageIcon, Table, Type, Upload, FileSpreadsheet, Loader, ShieldAlert, BellRing
+} from 'lucide-react';
+
+// --- Firebase Imports ---
+import { initializeApp } from "firebase/app";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { 
+  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc,
+  onSnapshot, query, orderBy, serverTimestamp, writeBatch 
+} from "firebase/firestore";
+
+// --- Firebase Configuration ---
+const firebaseConfig = {
+  apiKey: "AIzaSyA7VSQL0LNIBEsMqKeJikS-xvKv4OBA3hQ",
+  authDomain: "online-exam-e0282.firebaseapp.com",
+  projectId: "online-exam-e0282",
+  storageBucket: "online-exam-e0282.firebasestorage.app",
+  messagingSenderId: "743597814646",
+  appId: "1:743597814646:web:7daff8ce1f01623df8c057",
+  measurementId: "G-75674HXF78"
+};
+
+// --- Initialize Firebase ---
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Helper for Firestore Paths
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'online-exam-default';
+const QUESTIONS_COLLECTION = `artifacts/${appId}/public/data/questions`;
+const RESULTS_COLLECTION = `artifacts/${appId}/public/data/results`;
+const SETTINGS_COLLECTION = `artifacts/${appId}/public/data/settings`; 
+const SETTINGS_DOC_ID = 'config';
+
+// --- Utility Functions ---
+const shuffleArray = (array) => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+};
+
+const formatTime = (seconds) => {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m}:${s.toString().padStart(2, '0')}`;
+};
+
+const exportToCSV = (data, filename) => {
+  if (!data || !data.length) return;
+  const headers = ['Timestamp', 'Student ID', 'Name', 'Score', 'Total', 'Passed', 'Cheating Warnings'];
+  const rows = data.map(item => {
+    const dateStr = item.timestamp?.seconds 
+      ? new Date(item.timestamp.seconds * 1000).toLocaleString() 
+      : item.timestamp || '';
+      
+    return [
+      `"${dateStr}"`,
+      `"${item.studentId}"`,
+      `"${item.firstName} ${item.lastName}"`,
+      item.score,
+      item.total,
+      item.passed ? "Yes" : "No",
+      item.warnings || 0
+    ];
+  });
+  
+  const csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
+    + headers.join(",") + "\n" 
+    + rows.map(e => e.join(",")).join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const downloadTemplate = () => {
+  const headers = ['Question (โจทย์)', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Answer (เฉลยข้อที่ 1-4)'];
+  const sampleRows = [
+    ['"1 + 1 เท่ากับเท่าไหร่?"', '1', '2', '3', '4', '2'],
+    ['"เมืองหลวงของไทยคือ?"', 'เชียงใหม่', 'ภูเก็ต', 'กรุงเทพฯ', 'ขอนแก่น', '3']
+  ];
+  
+  const csvContent = "data:text/csv;charset=utf-8,\uFEFF"
+    + headers.join(",") + "\n"
+    + sampleRows.map(e => e.join(",")).join("\n");
+    
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", "exam_template.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+// --- Rich Text Editor ---
+const RichTextEditor = ({ value, onChange, placeholder }) => {
+  const textareaRef = useRef(null);
+
+  const insertTag = (tagOpen, tagClose = "") => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const before = text.substring(0, start);
+    const selection = text.substring(start, end);
+    const after = text.substring(end);
+
+    const newText = before + tagOpen + selection + tagClose + after;
+    onChange(newText);
+    setTimeout(() => textarea.focus(), 0);
+  };
+
+  const handleInsertImage = () => {
+    const url = prompt("กรุณาวางลิงก์รูปภาพ (Image URL):", "https://");
+    if (url) insertTag(`<img src="${url}" class="max-w-full h-auto rounded-lg my-2" />`);
+  };
+
+  const handleInsertTable = () => {
+    const tableTemplate = `
+<table class="border-collapse border border-gray-400 my-2 w-full text-sm">
+  <thead>
+    <tr class="bg-gray-100"><th class="border border-gray-400 p-2">หัวข้อ 1</th><th class="border border-gray-400 p-2">หัวข้อ 2</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="border border-gray-400 p-2">ข้อมูล 1</td><td class="border border-gray-400 p-2">ข้อมูล 2</td></tr>
+  </tbody>
+</table>`;
+    insertTag(tableTemplate);
+  };
+
+  return (
+    <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition">
+      <div className="flex flex-wrap gap-1 bg-gray-50 p-2 border-b border-gray-200">
+        <button type="button" onClick={() => insertTag('<b>', '</b>')} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="ตัวหนา"><Bold size={16}/></button>
+        <button type="button" onClick={() => insertTag('<i>', '</i>')} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="ตัวเอียง"><Italic size={16}/></button>
+        <button type="button" onClick={() => insertTag('<u>', '</u>')} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="ขีดเส้นใต้"><Underline size={16}/></button>
+        <div className="w-px h-6 bg-gray-300 mx-1 self-center"></div>
+        <button type="button" onClick={() => insertTag('<span class="text-lg">', '</span>')} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="ตัวใหญ่"><Type size={16}/></button>
+        <button type="button" onClick={() => insertTag('<span class="text-xl font-bold">', '</span>')} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="หัวข้อ"><Type size={20}/></button>
+        <div className="w-px h-6 bg-gray-300 mx-1 self-center"></div>
+        <button type="button" onClick={handleInsertImage} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="แทรกรูปภาพ"><ImageIcon size={16}/></button>
+        <button type="button" onClick={handleInsertTable} className="p-1.5 hover:bg-gray-200 rounded text-gray-700" title="แทรกตาราง"><Table size={16}/></button>
+      </div>
+      <textarea
+        ref={textareaRef}
+        className="w-full p-3 outline-none min-h-[120px] font-mono text-sm"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      <div className="bg-gray-50 px-3 py-1 text-xs text-gray-400 text-right">รองรับ HTML Tags</div>
+    </div>
+  );
+};
+
+// --- Modal ---
+const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
+  if (!isOpen) return null;
+  const sizeClasses = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl' };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm transition-opacity animate-fade-in" onClick={onClose}></div>
+      <div className={`relative bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} flex flex-col max-h-[90vh] overflow-hidden transform transition-all animate-scale-up`}>
+        <div className="flex justify-between items-center p-4 border-b bg-gray-50 flex-shrink-0">
+          <h3 className="font-bold text-lg text-gray-700">{title}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 hover:bg-gray-200 p-1 rounded-full transition"><X size={24} /></button>
+        </div>
+        <div className="p-6 overflow-y-auto custom-scrollbar">{children}</div>
+      </div>
+    </div>
+  );
+};
+
+// --- Forms ---
+const StudentLoginForm = ({ studentInfo, setStudentInfo, onLogin }) => (
+  <div className="space-y-4">
+    <div>
+      <label className="block text-sm font-bold text-gray-700 mb-1">รหัสนักเรียน</label>
+      <input type="text" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="เช่น 64001" value={studentInfo.id} onChange={e => setStudentInfo({...studentInfo, id: e.target.value})} />
+    </div>
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <label className="block text-sm font-bold text-gray-700 mb-1">ชื่อจริง</label>
+        <input type="text" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="ชื่อจริง" value={studentInfo.firstName} onChange={e => setStudentInfo({...studentInfo, firstName: e.target.value})} />
+      </div>
+      <div>
+        <label className="block text-sm font-bold text-gray-700 mb-1">นามสกุล</label>
+        <input type="text" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="นามสกุล" value={studentInfo.lastName} onChange={e => setStudentInfo({...studentInfo, lastName: e.target.value})} />
+      </div>
+    </div>
+    <button onClick={onLogin} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold mt-2 hover:bg-blue-700 transition">เข้าสู่ระบบ</button>
+  </div>
+);
+
+const TeacherLoginForm = ({ password, setPassword, onLogin }) => (
+  <div className="space-y-4">
+    <div>
+      <label className="block text-sm font-bold text-gray-700 mb-1">รหัสผ่าน</label>
+      <input type="password" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Hint: 1234" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onLogin()} />
+    </div>
+    <button onClick={onLogin} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold mt-2 hover:bg-indigo-700 transition">ยืนยัน</button>
+  </div>
+);
+
+const QuestionForm = ({ initialData, onSave, onCancel, isSaving }) => {
+  const [question, setQuestion] = useState(initialData?.question || '');
+  const [options, setOptions] = useState(initialData?.options || ['', '', '', '']);
+  const [correct, setCorrect] = useState(initialData?.correct || 0);
+
+  const handleOptionChange = (index, value) => {
+    const newOptions = [...options];
+    newOptions[index] = value;
+    setOptions(newOptions);
+  };
+
+  const handleSubmit = () => {
+    if (!question.trim() || options.some(opt => !opt.trim())) return alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+    onSave({ id: initialData?.id, question, options, correct });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <label className="block text-sm font-bold text-gray-700 mb-2">โจทย์คำถาม</label>
+        <RichTextEditor value={question} onChange={setQuestion} placeholder="พิมพ์คำถาม หรือใช้เครื่องมือด้านบนเพื่อแทรกรูป/ตาราง..." />
+        <div className="mt-2 text-xs text-gray-500">ตัวอย่าง: การใช้ <b>ตัวหนา</b>, <i>ตัวเอียง</i> หรือแทรก <span className="underline">รูปภาพ</span></div>
+      </div>
+      <div>
+        <label className="block text-sm font-bold text-gray-700 mb-2">ตัวเลือกคำตอบ (เลือกข้อที่ถูก)</label>
+        <div className="space-y-3">
+          {options.map((opt, idx) => (
+            <div key={idx} className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${correct === idx ? 'bg-green-50 border-green-500 shadow-sm' : 'bg-white border-gray-200 hover:border-gray-300'}`} onClick={() => setCorrect(idx)}>
+              <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors ${correct === idx ? 'border-green-600 bg-green-600 text-white' : 'border-gray-300 bg-white'}`}>
+                {correct === idx && <CheckCircle size={14} />}
+              </div>
+              <div className="flex-grow">
+                 <input className="w-full bg-transparent border-b border-transparent focus:border-indigo-400 outline-none text-sm py-1" placeholder={`ตัวเลือกข้อที่ ${idx + 1}`} value={opt} onChange={(e) => handleOptionChange(idx, e.target.value)} onClick={(e) => e.stopPropagation()} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="pt-4 flex gap-3 border-t">
+        <button onClick={handleSubmit} disabled={isSaving} className="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg font-bold hover:bg-indigo-700 transition shadow-md flex justify-center items-center gap-2">
+          {isSaving ? <Loader className="animate-spin"/> : <><Save size={18}/> บันทึกข้อมูล</>}
+        </button>
+        <button onClick={onCancel} disabled={isSaving} className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-lg font-bold hover:bg-gray-200 transition">ยกเลิก</button>
+      </div>
+    </div>
+  );
+};
+
+// --- Views ---
+const LandingPage = ({ onStudentClick, onTeacherClick, isAuthReady }) => (
+  <div className="flex flex-col items-center justify-center min-h-[80vh] animate-fade-in w-full">
+    <div className="text-center mb-10">
+      <div className="inline-block p-4 rounded-full bg-blue-50 mb-4 shadow-sm"><BookOpen size={64} className="text-blue-600" /></div>
+      <h1 className="text-4xl font-extrabold text-gray-800 mb-2">ระบบสอบออนไลน์</h1>
+      <p className="text-xl text-gray-500 font-light">Online Exam System (Connected to Firebase)</p>
+    </div>
+    {!isAuthReady ? (
+      <div className="flex flex-col items-center gap-2 text-gray-500">
+        <Loader className="animate-spin text-blue-600" size={32} />
+        <p>Connecting to Server...</p>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl px-4">
+        <button onClick={onStudentClick} className="flex flex-col items-center p-8 bg-white rounded-2xl shadow-md border-2 border-transparent hover:border-blue-500 hover:shadow-xl hover:-translate-y-1 transition-all group">
+          <div className="bg-blue-100 p-4 rounded-full mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300"><User size={40} /></div>
+          <h2 className="text-xl font-bold text-gray-700">สำหรับนักเรียน</h2>
+          <p className="text-gray-400 text-sm mt-2">เข้าทำแบบทดสอบ</p>
+        </button>
+        <button onClick={onTeacherClick} className="flex flex-col items-center p-8 bg-white rounded-2xl shadow-md border-2 border-transparent hover:border-indigo-500 hover:shadow-xl hover:-translate-y-1 transition-all group">
+          <div className="bg-indigo-100 p-4 rounded-full mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300"><Users size={40} /></div>
+          <h2 className="text-xl font-bold text-gray-700">สำหรับอาจารย์</h2>
+          <p className="text-gray-400 text-sm mt-2">จัดการระบบ / ดูคะแนน</p>
+        </button>
+      </div>
+    )}
+  </div>
+);
+
+const InstructionPage = ({ studentInfo, onStartExam, onBack, instructions, totalTime }) => (
+  <div className="w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden animate-fade-in my-8">
+    <div className="bg-blue-600 p-6 text-white text-center">
+      <h2 className="text-2xl font-bold">คำชี้แจงในการสอบ</h2>
+      <p className="opacity-90">กรุณาอ่านรายละเอียดก่อนเริ่มทำข้อสอบ</p>
+    </div>
+    <div className="p-8 space-y-6">
+      <div className="flex items-start gap-4 p-4 bg-blue-50 rounded-xl">
+        <User className="text-blue-600 flex-shrink-0 mt-1" />
+        <div><h3 className="font-bold text-gray-800">ผู้เข้าสอบ</h3><p className="text-gray-600">{studentInfo.firstName} {studentInfo.lastName} (รหัส: {studentInfo.id})</p></div>
+      </div>
+      <div className="space-y-4">
+        <h3 className="font-bold text-lg text-gray-800 border-b pb-2">กฎกติกาและข้อตกลง</h3>
+        <div className="flex items-center gap-3 text-gray-700 font-medium">
+           <Clock className="text-indigo-600" /> 
+           <span>เวลาในการสอบทั้งหมด: <strong>{totalTime} นาที</strong> (ระบบจะส่งคำตอบอัตโนมัติเมื่อหมดเวลา)</span>
+        </div>
+        {/* Render Editable Instructions */}
+        <div 
+          className="text-gray-600 prose prose-sm max-w-none"
+          dangerouslySetInnerHTML={{ __html: instructions }}
+        />
+        <div className="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200 flex items-start gap-3 mt-4">
+          <ShieldAlert size={20} className="flex-shrink-0 mt-0.5" />
+          <div>
+            <strong>คำเตือนระบบป้องกันการทุจริต:</strong>
+            <p>ห้ามสลับหน้าจอ (Tab Switching) หรือออกจากหน้าสอบโดยเด็ดขาด หากระบบตรวจพบเกิน 3 ครั้ง การสอบจะยุติทันที</p>
+          </div>
+        </div>
+      </div>
+      <div className="pt-4 flex gap-4">
+        <button onClick={onStartExam} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 shadow-lg hover:shadow-xl transition transform active:scale-95 text-lg">รับทราบและเริ่มทำข้อสอบ</button>
+        <button onClick={onBack} className="px-6 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-100 transition">ย้อนกลับ</button>
+      </div>
+    </div>
+  </div>
+);
+
+const TeacherDashboard = ({ 
+  questions, examResults, onLogout, 
+  examSettings, setExamSettings, onSaveSettings,
+  onOpenAddModal, onOpenEditModal, onOpenDeleteModal,
+  isImporting, onImport
+}) => {
+  const [activeTab, setActiveTab] = useState('questions');
+  const fileInputRef = useRef(null);
+
+  const handleExport = () => {
+    exportToCSV(examResults, `exam-results-${new Date().toISOString().slice(0,10)}.csv`);
+  };
+
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) onImport(file);
+    event.target.value = ''; // Reset
+  };
+
+  return (
+    <div className="w-full max-w-6xl mx-auto bg-white min-h-[85vh] rounded-2xl shadow-xl flex flex-col overflow-hidden animate-fade-in border border-gray-100">
+      <div className="bg-indigo-700 text-white p-6 flex justify-between items-center">
+        <div><h2 className="text-2xl font-bold flex items-center gap-2"><BookOpen/> ระบบจัดการข้อสอบ</h2><p className="text-indigo-200 text-sm">Panel สำหรับอาจารย์ (Online Database)</p></div>
+        <button onClick={onLogout} className="flex items-center gap-2 bg-indigo-800 hover:bg-indigo-900 px-4 py-2 rounded-lg transition border border-indigo-600"><LogOut size={18}/> ออกจากระบบ</button>
+      </div>
+      <div className="flex border-b border-gray-200 overflow-x-auto bg-gray-50">
+        {['questions', 'results', 'settings'].map(tab => (
+          <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-4 font-semibold flex items-center gap-2 whitespace-nowrap transition-colors capitalize ${activeTab === tab ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>
+            {tab === 'questions' && <><FileText size={20}/> คลังข้อสอบ ({questions.length})</>}
+            {tab === 'results' && <><Award size={20}/> ผลคะแนน ({examResults.length})</>}
+            {tab === 'settings' && <><Settings size={20}/> ตั้งค่า</>}
+          </button>
+        ))}
+      </div>
+      <div className="p-6 flex-grow overflow-y-auto bg-gray-50/50">
+        {activeTab === 'results' && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+               <h3 className="text-lg font-bold text-gray-700">รายการผลสอบล่าสุด</h3>
+               <button onClick={handleExport} disabled={examResults.length === 0} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold shadow-sm transition ${examResults.length === 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}><Download size={18}/> Export to Excel (CSV)</button>
+            </div>
+            {examResults.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl"><Users size={48} className="mb-4 opacity-50"/><p>ยังไม่มีนักเรียนส่งคำตอบเข้ามาในระบบ</p></div>
+            ) : (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[700px]">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-600 text-sm uppercase tracking-wider border-b">
+                        <th className="p-4 font-semibold">เวลาส่ง</th>
+                        <th className="p-4 font-semibold">รหัสนักเรียน</th>
+                        <th className="p-4 font-semibold">ชื่อ-นามสกุล</th>
+                        <th className="p-4 text-center font-semibold">คะแนน</th>
+                        <th className="p-4 text-center font-semibold">สถานะ</th>
+                        <th className="p-4 text-center font-semibold text-red-600">แจ้งเตือนโกง</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {examResults.map((result, idx) => (
+                        <tr key={idx} className="hover:bg-blue-50 transition-colors">
+                          <td className="p-4 text-gray-500 text-sm">{result.timestamp?.seconds ? new Date(result.timestamp.seconds * 1000).toLocaleString() : result.timestamp}</td>
+                          <td className="p-4 font-mono font-medium text-gray-700">{result.studentId}</td>
+                          <td className="p-4 font-medium">{result.firstName} {result.lastName}</td>
+                          <td className="p-4 text-center"><span className="font-bold text-lg text-indigo-600">{result.score}</span><span className="text-gray-400 text-sm">/{result.total}</span></td>
+                          <td className="p-4 text-center"><span className={`px-3 py-1 rounded-full text-xs font-bold ${result.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{result.passed ? 'ผ่าน' : 'ไม่ผ่าน'}</span></td>
+                          <td className="p-4 text-center">
+                            {result.warnings > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-bold"><AlertTriangle size={12}/> {result.warnings} ครั้ง</span>
+                            ) : <span className="text-gray-400">-</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {activeTab === 'questions' && (
+          <div className="space-y-4">
+             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3">
+               <p className="text-gray-500 text-sm font-medium">คลังข้อสอบทั้งหมด ({questions.length} ข้อ)</p>
+               <div className="flex gap-2">
+                 <button onClick={downloadTemplate} className="bg-white text-green-600 border border-green-600 px-3 py-2 rounded-lg hover:bg-green-50 text-sm font-bold shadow-sm flex items-center gap-2 transition"><FileSpreadsheet size={18}/> โหลด Template</button>
+                 <button onClick={() => fileInputRef.current?.click()} disabled={isImporting} className="bg-white text-blue-600 border border-blue-600 px-3 py-2 rounded-lg hover:bg-blue-50 text-sm font-bold shadow-sm flex items-center gap-2 transition">
+                   {isImporting ? <Loader className="animate-spin" size={18}/> : <Upload size={18}/>} นำเข้า CSV
+                 </button>
+                 <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+                 <button onClick={onOpenAddModal} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 text-sm font-bold shadow-md flex items-center gap-2 transition"><PlusCircle size={18}/> เพิ่มข้อสอบ</button>
+               </div>
+             </div>
+             {questions.length === 0 && <div className="text-center py-10 text-gray-400">ยังไม่มีข้อสอบในระบบ</div>}
+             {questions.map((q, idx) => (
+              <div key={q.id} className="border border-gray-200 rounded-xl p-5 hover:shadow-md transition bg-white group relative">
+                <div className="absolute top-4 right-4 flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                   <button onClick={() => onOpenEditModal(q)} className="bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 p-2 rounded-lg transition shadow-sm" title="แก้ไข"><Edit size={16} /></button>
+                   <button onClick={() => onOpenDeleteModal(q.id)} className="bg-white text-red-600 border border-red-200 hover:bg-red-50 p-2 rounded-lg transition shadow-sm" title="ลบ"><Trash2 size={16} /></button>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded mt-1 flex-shrink-0">Q{idx+1}</span>
+                  <div className="flex-grow">
+                    <div className="text-gray-800 font-medium mb-3 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: q.question }} />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm pl-2 border-l-2 border-gray-100">
+                      {q.options.map((opt, optIdx) => (
+                        <div key={optIdx} className={`flex items-center gap-2 ${q.correct === optIdx ? "text-green-700 font-medium bg-green-50 px-2 py-1 rounded-md -ml-2 w-fit" : "text-gray-500"}`}>
+                          <div className={`w-2 h-2 rounded-full ${q.correct === optIdx ? "bg-green-500" : "bg-gray-300"}`}></div>
+                          <span>{opt}</span>
+                          {q.correct === optIdx && <CheckCircle size={14} />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {activeTab === 'settings' && (
+           <div className="max-w-2xl mx-auto mt-8 animate-fade-in">
+             <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-lg">
+               <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 pb-4 border-b"><Settings size={24} className="text-indigo-600"/> ตั้งค่าการสอบ</h3>
+               
+               {/* 1. Total Exam Time */}
+               <div className="mb-8">
+                  <label className="block text-gray-700 font-bold mb-3">เวลาในการสอบทั้งหมด (นาที)</label>
+                  <div className="bg-indigo-50 p-6 rounded-xl flex items-center gap-6">
+                     <div className="flex-grow">
+                       <input type="number" min="1" max="180" className="w-full p-3 border rounded-lg" value={examSettings.totalTime || 60} onChange={(e) => setExamSettings({...examSettings, totalTime: Number(e.target.value)})} />
+                       <div className="text-xs text-gray-500 mt-2">ระบุเวลาเป็นนาที (ระบบจะเตือนเมื่อเหลือ 30, 15, 5 นาที)</div>
+                     </div>
+                     <div className="flex-shrink-0 flex flex-col items-center"><div className="w-20 h-14 flex items-center justify-center bg-white text-indigo-700 font-black rounded-xl text-2xl border-2 border-indigo-100 shadow-sm">{examSettings.totalTime || 60}</div><span className="text-xs mt-1">นาที</span></div>
+                  </div>
+               </div>
+
+               {/* 2. Random Count Setting */}
+               <div className="mb-8">
+                  <label className="block text-gray-700 font-bold mb-3">จำนวนข้อที่สุ่มมาให้ทำ</label>
+                  <div className="bg-indigo-50 p-6 rounded-xl flex items-center gap-6">
+                     <div className="flex-grow">
+                       <input type="range" min="1" max={Math.max(questions.length, 1)} value={examSettings.randomCount} onChange={(e) => setExamSettings({...examSettings, randomCount: Number(e.target.value)})} className="w-full h-2 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                       <div className="flex justify-between text-xs text-indigo-400 mt-2 font-medium"><span>1 ข้อ</span><span>{questions.length} ข้อ (Max)</span></div>
+                     </div>
+                     <div className="flex-shrink-0 flex flex-col items-center"><div className="w-16 h-14 flex items-center justify-center bg-white text-indigo-700 font-black rounded-xl text-2xl border-2 border-indigo-100 shadow-sm">{examSettings.randomCount}</div><span className="text-xs mt-1">ข้อ</span></div>
+                  </div>
+               </div>
+
+               {/* 3. Instructions Editor Setting */}
+               <div className="mb-8">
+                 <label className="block text-gray-700 font-bold mb-3">แก้ไขคำชี้แจง (Exam Instructions)</label>
+                 <RichTextEditor 
+                    value={examSettings.instructions || ''} 
+                    onChange={(val) => setExamSettings({...examSettings, instructions: val})}
+                    placeholder="พิมพ์คำชี้แจง กฎระเบียบ หรือข้อตกลงในการสอบที่นี่..."
+                 />
+                 <div className="mt-2 text-xs text-gray-400">สามารถใส่รูปภาพ หรือจัดรูปแบบข้อความได้</div>
+               </div>
+
+               {/* Save Button */}
+               <div className="flex justify-end pt-4 border-t">
+                  <button 
+                    onClick={onSaveSettings}
+                    className="bg-green-600 text-white px-6 py-2.5 rounded-lg font-bold shadow-md hover:bg-green-700 transition flex items-center gap-2"
+                  >
+                    <Save size={18} /> บันทึกการตั้งค่า
+                  </button>
+               </div>
+             </div>
+           </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const QuizInterface = ({ questions, currentQuestionIndex, timeLeft, studentInfo, userAnswers, isAnswered, handleAnswer, isSubmitting, onFinishExam }) => {
+  const currentQ = questions[currentQuestionIndex];
+  
+  // Anti-Cheating State
+  const [warningCount, setWarningCount] = useState(0);
+  const MAX_WARNINGS = 3;
+  const [timeWarning, setTimeWarning] = useState(null);
+
+  // Time Warning Logic
+  useEffect(() => {
+    // Check specific thresholds (in seconds)
+    const minutesLeft = Math.ceil(timeLeft / 60);
+    // Show warning only if it just crossed the threshold (using ranges to avoid spamming if timer slightly off sync)
+    if (timeLeft === 30 * 60) setTimeWarning("เหลือเวลา 30 นาที");
+    else if (timeLeft === 15 * 60) setTimeWarning("เหลือเวลา 15 นาที");
+    else if (timeLeft === 5 * 60) setTimeWarning("เหลือเวลา 5 นาที");
+    
+    // Clear warning after 5 seconds
+    if (timeWarning) {
+      const timer = setTimeout(() => setTimeWarning(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [timeLeft]);
+
+  // Anti-Cheating Effect
+  useEffect(() => {
+    const handleViolation = () => {
+      if (isSubmitting) return; 
+      
+      setWarningCount(prev => {
+        const newCount = prev + 1;
+        if (newCount >= MAX_WARNINGS) {
+          alert("คุณทำผิดกฎการสอบเกินกำหนด (สลับหน้าจอเกิน 3 ครั้ง) ระบบจะยุติการสอบทันที");
+          onFinishExam(userAnswers, newCount); 
+        } else {
+          alert(`⚠️ คำเตือนการทุจริต (${newCount}/${MAX_WARNINGS})!\n\nระบบตรวจพบว่าคุณพยายามออกจากหน้าจอสอบ\nหากครบ 3 ครั้ง ระบบจะยุติการสอบทันที`);
+        }
+        return newCount;
+      });
+    };
+
+    const onVisibilityChange = () => { if (document.hidden) handleViolation(); };
+    const onBlur = () => { handleViolation(); };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("blur", onBlur);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [isSubmitting, onFinishExam, userAnswers]);
+
+  return (
+    <div className="w-full max-w-4xl mx-auto p-4 animate-fade-in pt-8">
+      {/* Time Warning Banner */}
+      {timeWarning && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 shadow-lg rounded-r flex items-center gap-3 animate-bounce">
+          <BellRing size={24} />
+          <div>
+            <p className="font-bold">แจ้งเตือนเวลา</p>
+            <p>{timeWarning}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Cheating Warning Banner */}
+      {warningCount > 0 && (
+        <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative flex items-center gap-2 animate-pulse">
+          <AlertTriangle size={24} />
+          <span className="block sm:inline">แจ้งเตือน: ตรวจพบการพยายามออกจากหน้าจอสอบ ({warningCount}/{MAX_WARNINGS})</span>
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl shadow-lg p-5 mb-6 flex justify-between items-center border border-gray-100">
+         <div className="flex items-center gap-4">
+            <div className="bg-blue-100 p-3 rounded-full border-2 border-blue-50"><User size={24} className="text-blue-600"/></div>
+            <div><p className="text-base font-bold text-gray-800">{studentInfo.firstName} {studentInfo.lastName}</p><p className="text-xs text-gray-500 font-mono">ID: {studentInfo.id}</p></div>
+         </div>
+         <div className={`flex items-center gap-2 px-4 py-2 rounded-full font-mono font-bold text-lg shadow-inner ${timeLeft <= 300 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-700'}`}>
+            <Clock size={20} /> {formatTime(timeLeft)}
+         </div>
+      </div>
+      
+      <div className="flex justify-between text-sm text-gray-500 font-bold mb-1 px-1">
+        <span>ข้อที่ {currentQuestionIndex + 1}</span>
+        <span>จากทั้งหมด {questions.length} ข้อ</span>
+      </div>
+      <div className="w-full h-3 bg-gray-200 rounded-full mb-8 overflow-hidden shadow-inner"><div className="h-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-500 ease-out" style={{width: `${((currentQuestionIndex + 1) / questions.length) * 100}%`}}></div></div>
+      
+      <div className="bg-white rounded-2xl p-8 shadow-xl border-b-4 border-gray-100 mb-6">
+        <div className="mb-4 text-gray-500 text-sm font-bold uppercase tracking-wider">คำถาม</div>
+        <div className="text-2xl text-gray-800 leading-relaxed font-medium prose prose-lg max-w-none" dangerouslySetInnerHTML={{ __html: currentQ?.question || "Loading..." }} />
+      </div>
+      <div className="grid gap-4">
+        {currentQ?.options.map((option, index) => (
+          <button key={index} onClick={() => handleAnswer(index, warningCount)} disabled={isSubmitting} className={`relative p-5 rounded-xl text-left border-2 transition-all duration-200 flex items-center justify-between group shadow-sm ${userAnswers[currentQuestionIndex] !== undefined ? (index === userAnswers[currentQuestionIndex].selectedOption ? 'bg-blue-50 border-blue-500 text-blue-800' : 'bg-white border-gray-200 text-gray-400 opacity-60') : 'bg-white border-gray-200 hover:border-blue-500 hover:bg-blue-50 hover:shadow-md text-gray-700 hover:-translate-y-0.5'}`}>
+             <div className="flex items-center gap-4 w-full"><span className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold border transition-colors ${userAnswers[currentQuestionIndex] !== undefined ? 'border-transparent' : 'bg-gray-100 text-gray-500'}`}>{['A', 'B', 'C', 'D'][index]}</span><span className="font-medium text-lg">{option}</span></div>
+             {userAnswers[currentQuestionIndex]?.selectedOption === index && <CheckCircle className="text-blue-500 drop-shadow-sm flex-shrink-0" size={24} />}
+          </button>
+        ))}
+      </div>
+      {isSubmitting && <div className="text-center mt-4 text-gray-500"><Loader className="animate-spin inline mr-2"/> Saving results...</div>}
+    </div>
+  );
+};
+
+// --- Main Component ---
+const ExamSystem = () => {
+  // --- States ---
+  const [currentView, setCurrentView] = useState('landing');
+  const [activeModal, setActiveModal] = useState(null); 
+  const [modalData, setModalData] = useState(null); 
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [user, setUser] = useState(null);
+
+  // Data States
+  const [questionBank, setQuestionBank] = useState([]);
+  const [activeQuestions, setActiveQuestions] = useState([]);
+  const [examResults, setExamResults] = useState([]);
+  const [examSettings, setExamSettings] = useState({ 
+    randomCount: 5,
+    totalTime: 60, // Default 60 mins
+    instructions: `
+<div class="space-y-4 text-gray-700 leading-relaxed">
+  <h4 class="font-bold text-lg text-indigo-700 border-b border-indigo-100 pb-2">ข้อปฏิบัติในการสอบ (Examination Rules)</h4>
+  
+  <div>
+    <strong class="text-gray-900 block mb-1">1. รูปแบบการสอบ:</strong>
+    <ul class="list-disc pl-5 space-y-1">
+      <li>ข้อสอบเป็นแบบปรนัย (เลือกตอบ) 4 ตัวเลือก</li>
+      <li>ระบบจะทำการ<strong>สุ่มลำดับโจทย์และตัวเลือก</strong>สำหรับผู้เข้าสอบแต่ละคน</li>
+      <li>สามารถข้ามข้อและย้อนกลับมาทำได้ภายในเวลาที่กำหนด</li>
+    </ul>
+  </div>
+
+  <div>
+    <strong class="text-gray-900 block mb-1">2. การจับเวลา:</strong>
+    <ul class="list-disc pl-5 space-y-1">
+      <li>การสอบมีเวลาจำกัด (ตรวจสอบเวลาด้านบน)</li>
+      <li>ระบบจะแจ้งเตือนเมื่อเวลาเหลือ 30, 15 และ 5 นาทีสุดท้าย</li>
+      <li>หากหมดเวลา ระบบจะ<strong>ส่งคำตอบอัตโนมัติ</strong>ทันที</li>
+    </ul>
+  </div>
+
+  <div class="bg-red-50 border border-red-200 p-4 rounded-lg">
+    <strong class="text-red-700 block mb-1 flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield-alert"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg> 3. กฎเหล็กป้องกันการทุจริต:</strong>
+    <ul class="list-disc pl-5 space-y-1 text-red-800 text-sm">
+      <li><strong>ห้ามสลับหน้าจอ (Tab Switching)</strong> หรือออกจากหน้าสอบโดยเด็ดขาด</li>
+      <li>ระบบจะตรวจจับการออกจากหน้าจอ หากพบเกิน <strong>3 ครั้ง</strong> ระบบจะยุติการสอบทันที</li>
+      <li>กรุณาปิดโปรแกรมแจ้งเตือนอื่นๆ เพื่อป้องกันการเผลอหลุดจากหน้าจอ</li>
+    </ul>
+  </div>
+
+  <p class="text-center font-bold text-indigo-600 mt-4">--- ขอให้ผู้เข้าสอบทุกท่านโชคดี ---</p>
+</div>
+    ` 
+  });
+  
+  // Student State
+  const [studentInfo, setStudentInfo] = useState({ firstName: '', lastName: '', id: '' });
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [score, setScore] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(0); // Global timer
+  const [userAnswers, setUserAnswers] = useState([]); 
+  const [isSubmittingResult, setIsSubmittingResult] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isSavingQuestion, setIsSavingQuestion] = useState(false);
+  const [teacherPassword, setTeacherPassword] = useState('');
+  const [finalWarnings, setFinalWarnings] = useState(0);
+
+  // --- Inject Sarabun Font via Link ---
+  useEffect(() => {
+    if (!document.querySelector('link[href*="fonts.googleapis.com/css2?family=Sarabun"]')) {
+      const link = document.createElement('link');
+      link.href = 'https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap';
+      link.rel = 'stylesheet';
+      document.head.appendChild(link);
+    }
+  }, []);
+
+  // --- Auth & Initial Data ---
+  useEffect(() => {
+    signInAnonymously(auth).catch(err => console.error("Auth failed", err));
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const qQuery = query(collection(db, QUESTIONS_COLLECTION), orderBy('timestamp', 'asc'));
+    const unsubQ = onSnapshot(qQuery, (snapshot) => {
+      const qData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setQuestionBank(qData);
+    });
+
+    const rQuery = query(collection(db, RESULTS_COLLECTION), orderBy('timestamp', 'desc'));
+    const unsubR = onSnapshot(rQuery, (snapshot) => {
+      const rData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setExamResults(rData);
+    });
+
+    const fetchSettings = async () => {
+      try {
+        const docRef = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC_ID);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setExamSettings(prev => ({ ...prev, ...docSnap.data() }));
+        }
+      } catch (err) {
+        console.error("Error fetching settings:", err);
+      }
+    };
+    fetchSettings();
+
+    return () => { unsubQ(); unsubR(); };
+  }, [user]);
+
+  // Sync settings limit
+  useEffect(() => {
+    if (examSettings.randomCount > questionBank.length && questionBank.length > 0) {
+      setExamSettings(prev => ({ ...prev, randomCount: questionBank.length }));
+    }
+  }, [questionBank.length]);
+
+  // --- Global Exam Timer ---
+  useEffect(() => {
+    let timer;
+    if (currentView === 'quiz' && timeLeft > 0 && !isSubmittingResult) {
+      timer = setTimeout(() => {
+        setTimeLeft(prev => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0 && currentView === 'quiz' && !isSubmittingResult) {
+      // Time's up -> Force Submit
+      handleForceFinish(userAnswers, finalWarnings);
+    }
+    return () => clearTimeout(timer);
+  }, [timeLeft, currentView, isSubmittingResult, userAnswers, finalWarnings]);
+
+  // --- Handlers ---
+  const goHome = () => {
+    setCurrentView('landing');
+    setActiveModal(null);
+    setTeacherPassword('');
+    setStudentInfo({ firstName: '', lastName: '', id: '' });
+    setFinalWarnings(0);
+  };
+
+  const handleStudentLogin = () => {
+    if (!studentInfo.firstName || !studentInfo.lastName || !studentInfo.id) return alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+    setActiveModal(null);
+    setCurrentView('instruction');
+  };
+
+  const startExam = () => {
+    if (questionBank.length === 0) return alert("ยังไม่มีข้อสอบในระบบ โปรดแจ้งอาจารย์");
+    const shuffled = shuffleArray(questionBank);
+    const selectedQuestions = shuffled.slice(0, examSettings.randomCount);
+    setActiveQuestions(selectedQuestions);
+    setCurrentView('quiz');
+    // Set total time in seconds
+    setTimeLeft((examSettings.totalTime || 60) * 60); 
+    setScore(0);
+    setCurrentQuestionIndex(0);
+    setUserAnswers(Array(selectedQuestions.length).fill(undefined)); // Initialize empty answers
+    setFinalWarnings(0);
+  };
+
+  // Helper to submit results
+  const submitResults = async (finalScore, warnings) => {
+    setIsSubmittingResult(true);
+    const resultData = {
+      studentId: studentInfo.id,
+      firstName: studentInfo.firstName,
+      lastName: studentInfo.lastName,
+      score: finalScore,
+      total: activeQuestions.length,
+      passed: (finalScore / activeQuestions.length) >= 0.6,
+      timestamp: serverTimestamp(),
+      warnings: warnings
+    };
+    
+    try {
+      await addDoc(collection(db, RESULTS_COLLECTION), resultData);
+      setScore(finalScore); // Update score for result view
+      setCurrentView('result');
+    } catch (e) {
+      console.error("Error saving result", e);
+      alert("เกิดข้อผิดพลาดในการบันทึกคะแนน กรุณาแจ้งอาจารย์");
+    }
+    setIsSubmittingResult(false);
+  };
+
+  // Answer Handler (Doesn't reset timer)
+  const handleAnswer = (optionIndex, currentWarningCount) => {
+    setFinalWarnings(currentWarningCount);
+    
+    // Record Answer
+    const currentQ = activeQuestions[currentQuestionIndex];
+    const isCorrect = optionIndex === currentQ.correct;
+    
+    const newAnswers = [...userAnswers];
+    newAnswers[currentQuestionIndex] = { 
+      questionId: currentQ.id, 
+      selectedOption: optionIndex, 
+      isCorrect 
+    };
+    setUserAnswers(newAnswers);
+
+    // Delay slightly to show selection then move next
+    setTimeout(() => {
+      if (currentQuestionIndex < activeQuestions.length - 1) {
+        setCurrentQuestionIndex(prev => prev + 1);
+      } else {
+        // Last Question - Finish Exam
+        const finalScore = newAnswers.reduce((acc, ans) => acc + (ans?.isCorrect ? 1 : 0), 0);
+        submitResults(finalScore, currentWarningCount);
+      }
+    }, 300);
+  };
+
+  const handleForceFinish = (currentAnswers, currentWarningCount) => {
+    const finalScore = currentAnswers.reduce((acc, ans) => acc + (ans?.isCorrect ? 1 : 0), 0);
+    submitResults(finalScore, currentWarningCount);
+  };
+
+  const handleTeacherLogin = () => {
+    if (teacherPassword === '1234') { 
+      setActiveModal(null);
+      setCurrentView('teacher-dashboard');
+    } else {
+      alert("รหัสผ่านไม่ถูกต้อง (ลองใช้ 1234)");
+    }
+  };
+
+  const handleSaveQuestion = async (newQ) => {
+    setIsSavingQuestion(true);
+    try {
+      if (newQ.id) {
+        await updateDoc(doc(db, QUESTIONS_COLLECTION, newQ.id), { 
+          question: newQ.question, options: newQ.options, correct: newQ.correct 
+        });
+      } else {
+        await addDoc(collection(db, QUESTIONS_COLLECTION), {
+          question: newQ.question, options: newQ.options, correct: newQ.correct, timestamp: serverTimestamp()
+        });
+      }
+      setActiveModal(null);
+    } catch (e) { console.error("Error", e); alert("บันทึกไม่สำเร็จ"); }
+    setIsSavingQuestion(false);
+  };
+
+  const handleDeleteQuestion = async () => {
+    try { await deleteDoc(doc(db, QUESTIONS_COLLECTION, modalData)); setActiveModal(null); } 
+    catch (e) { console.error("Error", e); alert("ลบไม่สำเร็จ"); }
+  };
+
+  const handleSaveSettings = async () => {
+    try { await setDoc(doc(db, SETTINGS_COLLECTION, SETTINGS_DOC_ID), examSettings); alert("บันทึกสำเร็จ"); } 
+    catch (e) { console.error("Error", e); alert("บันทึกไม่สำเร็จ"); }
+  };
+
+  const handleCSVImport = async (file) => {
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const rows = e.target.result.split('\n').filter(row => row.trim());
+        const batch = writeBatch(db);
+        let count = 0;
+        for (let i = 1; i < rows.length; i++) {
+          const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(col => col.replace(/^"|"$/g, '').trim());
+          if (cols.length >= 6) {
+            const corr = parseInt(cols[5]) - 1;
+            if (!isNaN(corr) && corr >= 0 && corr < 4) {
+              batch.set(doc(collection(db, QUESTIONS_COLLECTION)), {
+                question: cols[0], options: [cols[1], cols[2], cols[3], cols[4]], correct: corr, timestamp: serverTimestamp()
+              });
+              count++;
+            }
+          }
+        }
+        if (count > 0) { await batch.commit(); alert(`นำเข้าสำเร็จ ${count} ข้อ`); } else alert("ไม่พบข้อมูล");
+      } catch (err) { console.error(err); alert("Error"); }
+      setIsImporting(false);
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 font-sans py-8 px-4 flex flex-col items-center" style={{ fontFamily: "'Sarabun', sans-serif" }}>
+      {currentView === 'landing' && <LandingPage onStudentClick={() => setActiveModal('student-login')} onTeacherClick={() => setActiveModal('teacher-login')} isAuthReady={isAuthReady} />}
+      {currentView === 'instruction' && <InstructionPage studentInfo={studentInfo} onStartExam={startExam} onBack={goHome} instructions={examSettings.instructions} totalTime={examSettings.totalTime || 60} />}
+      {currentView === 'teacher-dashboard' && <TeacherDashboard questions={questionBank} examResults={examResults} onLogout={goHome} examSettings={examSettings} setExamSettings={setExamSettings} onSaveSettings={handleSaveSettings} onOpenAddModal={() => { setModalData(null); setActiveModal('question-form'); }} onOpenEditModal={(q) => { setModalData(q); setActiveModal('question-form'); }} onOpenDeleteModal={(id) => { setModalData(id); setActiveModal('delete-confirm'); }} isImporting={isImporting} onImport={handleCSVImport} />}
+      {currentView === 'quiz' && <QuizInterface questions={activeQuestions} currentQuestionIndex={currentQuestionIndex} timeLeft={timeLeft} studentInfo={studentInfo} userAnswers={userAnswers} isAnswered={false} handleAnswer={handleAnswer} isSubmitting={isSubmittingResult} onFinishExam={handleForceFinish} />}
+      {currentView === 'result' && <ResultInterface score={score} totalQuestions={activeQuestions.length} studentInfo={studentInfo} onGoHome={goHome} isPassed={(score / activeQuestions.length) >= 0.6} />}
+
+      <Modal isOpen={activeModal === 'student-login'} onClose={() => setActiveModal(null)} title="ลงชื่อเข้าสอบ"><StudentLoginForm studentInfo={studentInfo} setStudentInfo={setStudentInfo} onLogin={handleStudentLogin} /></Modal>
+      <Modal isOpen={activeModal === 'teacher-login'} onClose={() => setActiveModal(null)} title="อาจารย์"><TeacherLoginForm password={teacherPassword} setPassword={setTeacherPassword} onLogin={handleTeacherLogin} /></Modal>
+      <Modal isOpen={activeModal === 'question-form'} onClose={() => setActiveModal(null)} title={modalData ? "แก้ไข" : "เพิ่ม"} size="lg"><QuestionForm initialData={modalData} onSave={handleSaveQuestion} onCancel={() => setActiveModal(null)} isSaving={isSavingQuestion} /></Modal>
+      <Modal isOpen={activeModal === 'delete-confirm'} onClose={() => setActiveModal(null)} title="ยืนยันลบ"><div className="text-center"><AlertTriangle size={48} className="mx-auto text-red-500 mb-4" /><h3 className="text-xl font-bold">ยืนยันลบ?</h3><div className="flex gap-3 mt-4"><button onClick={handleDeleteQuestion} className="flex-1 bg-red-600 text-white py-2 rounded-lg">ลบ</button><button onClick={() => setActiveModal(null)} className="flex-1 bg-gray-200 py-2 rounded-lg">ยกเลิก</button></div></div></Modal>
+    </div>
+  );
+};
+
+export default ExamSystem;
