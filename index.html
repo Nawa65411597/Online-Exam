@@ -329,7 +329,44 @@
             const [questionBank, setQuestionBank] = useState([]);
             const [activeQuestions, setActiveQuestions] = useState([]);
             const [examResults, setExamResults] = useState([]);
-            const [examSettings, setExamSettings] = useState({ randomCount: 5, totalTime: 60, instructions: `<div class="space-y-4 text-gray-700"><h4 class="font-bold text-lg text-indigo-700">ข้อปฏิบัติในการสอบ</h4><ul><li>ข้อสอบเป็นแบบปรนัย 4 ตัวเลือก</li><li>ห้ามสลับหน้าจอระหว่างการสอบ</li></ul></div>` });
+            const [examSettings, setExamSettings] = useState({ 
+                randomCount: 5,
+                totalTime: 60, // Default 60 mins
+                instructions: `
+<div class="space-y-4 text-gray-700 leading-relaxed">
+  <h4 class="font-bold text-lg text-indigo-700 border-b border-indigo-100 pb-2">ข้อปฏิบัติในการสอบ (Examination Rules)</h4>
+  
+  <div>
+    <strong class="text-gray-900 block mb-1">1. รูปแบบการสอบ:</strong>
+    <ul class="list-disc pl-5 space-y-1">
+      <li>ข้อสอบเป็นแบบปรนัย (เลือกตอบ) 4 ตัวเลือก</li>
+      <li>ระบบจะทำการ<strong>สุ่มลำดับโจทย์และตัวเลือก</strong>สำหรับผู้เข้าสอบแต่ละคน</li>
+      <li>สามารถข้ามข้อและย้อนกลับมาทำได้ภายในเวลาที่กำหนด</li>
+    </ul>
+  </div>
+
+  <div>
+    <strong class="text-gray-900 block mb-1">2. การจับเวลา:</strong>
+    <ul class="list-disc pl-5 space-y-1">
+      <li>การสอบมีเวลาจำกัด (ตรวจสอบเวลาด้านบน)</li>
+      <li>ระบบจะแจ้งเตือนเมื่อเวลาเหลือ 30, 15 และ 5 นาทีสุดท้าย</li>
+      <li>หากหมดเวลา ระบบจะ<strong>ส่งคำตอบอัตโนมัติ</strong>ทันที</li>
+    </ul>
+  </div>
+
+  <div class="bg-red-50 border border-red-200 p-4 rounded-lg">
+    <strong class="text-red-700 block mb-1 flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield-alert"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg> 3. กฎเหล็กป้องกันการทุจริต:</strong>
+    <ul class="list-disc pl-5 space-y-1 text-red-800 text-sm">
+      <li><strong>ห้ามสลับหน้าจอ (Tab Switching)</strong> หรือออกจากหน้าสอบโดยเด็ดขาด</li>
+      <li>ระบบจะตรวจจับการออกจากหน้าจอ หากพบเกิน <strong>3 ครั้ง</strong> ระบบจะยุติการสอบทันที</li>
+      <li>กรุณาปิดโปรแกรมแจ้งเตือนอื่นๆ เพื่อป้องกันการเผลอหลุดจากหน้าจอ</li>
+    </ul>
+  </div>
+
+  <p class="text-center font-bold text-indigo-600 mt-4">--- ขอให้ผู้เข้าสอบทุกท่านโชคดี ---</p>
+</div>
+` 
+            });
             const [studentInfo, setStudentInfo] = useState({ firstName: '', lastName: '', id: '' });
             const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
             const [score, setScore] = useState(0);
