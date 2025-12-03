@@ -250,6 +250,8 @@
             const [activeTab, setActiveTab] = useState('questions');
             const [importing, setImporting] = useState(false);
 
+            const STORAGE_KEY = `exam_checkpoint_${appId}`;
+
             // 3.1 Init & Auth (FIXED: Ensure auth triggers)
             useEffect(() => {
                 const initAuth = async () => {
@@ -267,6 +269,36 @@
                 });
                 return () => unsubAuth();
             }, []);
+
+            // 3.1.5 Restore Session from LocalStorage
+            useEffect(() => {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    try {
+                        const s = JSON.parse(saved);
+                        // Validate basic structure
+                        if (s.view === 'quiz' && s.student && s.activeQs) {
+                            setStudent(s.student);
+                            setActiveQs(s.activeQs);
+                            setAnswers(s.answers);
+                            setQIndex(s.qIndex);
+                            setTimer(s.timer);
+                            setWarnings(s.warnings);
+                            setView('quiz');
+                            console.log("Restored session");
+                        }
+                    } catch(e) { console.error("Restore failed", e); localStorage.removeItem(STORAGE_KEY); }
+                }
+            }, []);
+
+            // 3.1.6 Auto-Save Session
+            useEffect(() => {
+                if (view === 'quiz' && !isSubmitting) {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                        view: 'quiz', student, activeQs, answers, qIndex, timer, warnings
+                    }));
+                }
+            }, [view, student, activeQs, answers, qIndex, timer, warnings, isSubmitting]);
 
             // 3.2 Fetch Data (Optimized)
             useEffect(() => {
@@ -310,10 +342,18 @@
                 document.addEventListener('keydown', handleKeyDown);
                 document.addEventListener('keyup', handleKeyUp);
 
+                // Prevent accidentally leaving
+                const handleBeforeUnload = (e) => {
+                    e.preventDefault();
+                    e.returnValue = ''; // Required for Chrome
+                };
+                window.addEventListener('beforeunload', handleBeforeUnload);
+
                 return () => {
                     document.removeEventListener('contextmenu', handleContextMenu);
                     document.removeEventListener('keydown', handleKeyDown);
                     document.removeEventListener('keyup', handleKeyUp);
+                    window.removeEventListener('beforeunload', handleBeforeUnload);
                 };
             }, [view]);
 
@@ -368,6 +408,7 @@
                         score, total: activeQs.length, passed: activeQs.length>0 ? (score/activeQs.length)>=0.6 : false,
                         warnings: finalWarn, timestamp: new Date()
                     });
+                    localStorage.removeItem(STORAGE_KEY); // Clear session after submit
                     setView('result');
                 } catch(e) { alert("Error: " + e.message); } 
                 finally { setIsSubmitting(false); }
@@ -480,7 +521,7 @@
             }
 
             if(view === 'result') return (
-                <div className="flex flex-col min-h-screen p-4 animate-fade-in"><StatusBar currentStep="result" /><div className="flex-grow flex items-center justify-center"><div className="bg-white p-12 rounded-3xl shadow-2xl text-center max-w-lg w-full"><div className="inline-block p-6 bg-green-100 rounded-full mb-6 animate-bounce"><Icon name="Award" size={64} className="text-green-600"/></div><h2 className="text-3xl font-bold text-gray-800 mb-2">ส่งคำตอบเรียบร้อย! 🎉</h2><p className="text-gray-500 mb-8">บันทึกผลเข้าระบบแล้ว</p><button onClick={()=>{setView('landing'); setModal(null);}} className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-black transition">กลับหน้าหลัก 🏠</button></div></div></div>
+                <div className="flex flex-col min-h-screen p-4 animate-fade-in"><StatusBar currentStep="result" /><div className="flex-grow flex items-center justify-center"><div className="bg-white p-12 rounded-3xl shadow-2xl text-center max-w-lg w-full"><div className="inline-block p-6 bg-green-100 rounded-full mb-6 animate-bounce"><Icon name="Award" size={64} className="text-green-600"/></div><h2 className="text-3xl font-bold text-gray-800 mb-2">ส่งคำตอบเรียบร้อย! 🎉</h2><p className="text-gray-500 mb-8">บันทึกผลเข้าระบบแล้ว</p><button onClick={()=>{setView('landing'); setModal(null); localStorage.removeItem(STORAGE_KEY);}} className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-black transition">กลับหน้าหลัก 🏠</button></div></div></div>
             );
 
             if(view === 'teacher') return (
