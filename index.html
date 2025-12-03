@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบสอบออนไลน์ (Secure Exam System)</title>
     
+    <!-- 1. ฟอนต์ Sarabun -->
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap" rel="stylesheet">
     
+    <!-- 2. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -23,12 +25,15 @@
         }
     </script>
 
+    <!-- 3. React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <!-- 4. Lucide Icons (Fixed Version) -->
     <script src="https://unpkg.com/lucide@0.344.0"></script>
     
+    <!-- 5. Firebase (Compat Mode) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -43,7 +48,6 @@
         #error-log { display: none; position: fixed; bottom: 20px; right: 20px; max-width: 400px; background: #fee2e2; color: #991b1b; padding: 15px; border-radius: 8px; border: 1px solid #f87171; font-family: monospace; font-size: 12px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
 
         /* --- Security Styles --- */
-        /* ห้ามลากคลุมข้อความ */
         .no-select {
             -webkit-user-select: none;
             -moz-user-select: none;
@@ -51,29 +55,29 @@
             user-select: none;
         }
 
-        /* ลายน้ำ (Watermark) */
         .watermark-overlay {
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
-            z-index: 0; /* อยู่ข้างหลังเนื้อหา แต่เห็นได้ชัด */
+            z-index: 0; 
             pointer-events: none;
             display: flex;
             flex-wrap: wrap;
-            justify-content: space-around;
-            align-content: space-around;
+            justify-content: center; /* จัดกลาง */
+            align-content: center;
             overflow: hidden;
             background: transparent;
         }
 
         .watermark-item {
-            transform: rotate(-30deg);
-            color: #6b7280;
-            opacity: 0.08; /* ปรับความจางตรงนี้ */
-            font-size: 16px;
-            font-weight: 800;
+            transform: rotate(-25deg);
+            color: #374151; /* สีเทาเข้มขึ้นอีกนิด */
+            opacity: 0.30; /* ปรับความเข้มขึ้น (เดิม 0.15) */
+            font-size: 40px; /* ปรับขนาดใหญ่ขึ้นมาก (เดิม 24px) */
+            font-weight: 900;
             white-space: nowrap;
-            margin: 50px;
+            margin: 80px; /* เพิ่มระยะห่างเพราะตัวอักษรใหญ่ขึ้น */
             user-select: none;
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.5); /* เพิ่มเงาขาวให้อ่านง่ายขึ้นบนพื้นหลัง */
         }
     </style>
 </head>
@@ -96,8 +100,9 @@
 
         const { useState, useEffect, useRef, useMemo } = React;
 
-        // --- 1. Firebase Config (ใส่ Config ของคุณที่นี่) ---
-        const firebaseConfig = {
+        // --- 1. Firebase Config ---
+        // ใช้ Config จากระบบ Environment เพื่อให้มั่นใจว่าเชื่อมต่อได้จริง
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
             apiKey: "AIzaSyA7VSQL0LNIBEsMqKeJikS-xvKv4OBA3hQ",
             authDomain: "online-exam-e0282.firebaseapp.com",
             projectId: "online-exam-e0282",
@@ -112,7 +117,10 @@
         
         const auth = firebase.auth();
         const db = firebase.firestore();
-        const appId = 'online-exam-default'; 
+        // ใช้ App ID จากระบบ หรือ Fallback
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'online-exam-default'; 
+        
+        // Use proper paths for this environment
         const COL_Q = `artifacts/${appId}/public/data/questions`;
         const COL_R = `artifacts/${appId}/public/data/results`;
         const COL_S = `artifacts/${appId}/public/data/settings`;
@@ -120,7 +128,7 @@
 
         // --- 2. Components ---
 
-        // 2.1 Icon Component
+        // 2.1 Icon
         const Icon = ({ name, size = 20, className = "" }) => {
             const ref = useRef(null);
             useEffect(() => {
@@ -137,11 +145,12 @@
             return <span ref={ref} className={`inline-flex items-center justify-center align-middle ${className}`} style={{ width: size, height: size }}></span>;
         };
 
-        // 2.2 Watermark Component (New!)
+        // 2.2 Watermark (Updated for larger size)
         const WatermarkOverlay = ({ text }) => {
-            const items = Array.from({ length: 45 }).map((_, i) => (
+            // ลดจำนวนลงเหลือ 30 เพราะขนาดใหญ่ขึ้น เดี๋ยวจะรกไป
+            const items = Array.from({ length: 30 }).map((_, i) => (
                 <div key={i} className="watermark-item">
-                    {text} <br/> <span style={{fontSize:'10px'}}>IP: {window.location.hostname}</span>
+                    {text} <br/> <span style={{fontSize:'18px', fontWeight: 'normal'}}>IP: {window.location.hostname}</span>
                 </div>
             ));
             return <div className="watermark-overlay">{items}</div>;
@@ -223,7 +232,7 @@
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
             const [modal, setModal] = useState(null);
-            const [refreshKey, setRefreshKey] = useState(0); // For reloading data
+            const [refreshKey, setRefreshKey] = useState(0); 
 
             // Data & Config
             const [questions, setQuestions] = useState([]);
@@ -242,28 +251,37 @@
             const [activeTab, setActiveTab] = useState('questions');
             const [importing, setImporting] = useState(false);
 
-            // 3.1 Init & Auth
+            // 3.1 Init & Auth (FIXED: Ensure auth triggers)
             useEffect(() => {
-                const unsubAuth = auth.onAuthStateChanged(u => { setUser(u); setLoading(false); });
+                const initAuth = async () => {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await auth.signInWithCustomToken(__initial_auth_token);
+                    } else {
+                        await auth.signInAnonymously();
+                    }
+                };
+                initAuth();
+
+                const unsubAuth = auth.onAuthStateChanged(u => { 
+                    setUser(u); 
+                    if(u) setLoading(false); 
+                });
                 return () => unsubAuth();
             }, []);
 
             // 3.2 Fetch Data (Optimized)
             useEffect(() => {
                 if(!user) return;
-                // Load Questions (Realtime ok for small dataset)
                 const unsubQ = db.collection(COL_Q).orderBy('timestamp', 'asc')
                     .onSnapshot(s => setQuestions(s.docs.map(d => ({id: d.id, ...d.data()}))));
-                // Load Settings
                 db.collection(COL_S).doc(DOC_S).get().then(d => { if(d.exists) setSettings(prev => ({...prev, ...d.data()})); });
                 return () => unsubQ();
             }, [user]);
 
-            // Fetch Results only when Teacher tab is active or refreshed
             useEffect(() => {
                 if(view === 'teacher' && activeTab === 'results') {
                     setLoading(true);
-                    db.collection(COL_R).orderBy('timestamp', 'desc').limit(100).get() // Limit to 100
+                    db.collection(COL_R).orderBy('timestamp', 'desc').limit(100).get()
                     .then(s => {
                         setResults(s.docs.map(d => ({id: d.id, ...d.data()})));
                         setLoading(false);
@@ -271,9 +289,9 @@
                 }
             }, [view, refreshKey, activeTab]);
 
-            // 3.3 Security Logic (Anti-Cheat)
+            // 3.3 Security Logic
             useEffect(() => {
-                if (view !== 'quiz') return; // Active only during quiz
+                if (view !== 'quiz') return;
 
                 const handleContextMenu = (e) => { e.preventDefault(); return false; };
                 const handleKeyDown = (e) => {
@@ -283,7 +301,7 @@
                 };
                 const handleKeyUp = (e) => {
                     if (e.key === 'PrintScreen') {
-                        navigator.clipboard.writeText(''); // Clear clipboard
+                        navigator.clipboard.writeText(''); 
                         alert('⚠️ ตรวจพบการแคปหน้าจอ! ระบบได้บันทึกการกระทำนี้ไว้');
                         setWarnings(w => w + 1);
                     }
@@ -300,7 +318,7 @@
                 };
             }, [view]);
 
-            // 3.4 Timer & Blur Detection
+            // 3.4 Timer & Blur
             useEffect(() => {
                 let interval;
                 if(view === 'quiz' && timer > 0 && !isSubmitting) {
@@ -524,7 +542,11 @@
                         )}
                     </div>
                     <Modal isOpen={modal?.type === 'q-form'} onClose={()=>setModal(null)} title={modal?.data?.id ? "Edit Question" : "New Question"} size="lg">
-                        <QuestionForm initialData={modal.data} onSave={(q)=>{ const ref=q.id?db.collection(COL_Q).doc(q.id):db.collection(COL_Q).doc(String(Date.now())); ref.set({ ...q, timestamp: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true}).then(()=>setModal(null)); }} onCancel={()=>setModal(null)}/>
+                        <QuestionForm 
+                            initialData={modal?.data} 
+                            onSave={(q)=>{ const ref=q.id?db.collection(COL_Q).doc(q.id):db.collection(COL_Q).doc(String(Date.now())); ref.set({ ...q, timestamp: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true}).then(()=>setModal(null)); }} 
+                            onCancel={()=>setModal(null)}
+                        />
                     </Modal>
                 </div>
             );
