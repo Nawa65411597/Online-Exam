@@ -58,8 +58,8 @@
         .watermark-overlay {
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
-            z-index: 0; 
-            pointer-events: none;
+            z-index: 9999; /* แก้ไข: ให้ลายน้ำอยู่บนสุดทับทุกเลเยอร์ */
+            pointer-events: none; /* สำคัญ: ทำให้คลิกทะลุได้ ไม่บังปุ่ม */
             display: flex;
             flex-wrap: wrap;
             justify-content: center; /* จัดกลาง */
@@ -70,14 +70,14 @@
 
         .watermark-item {
             transform: rotate(-25deg);
-            color: #374151; /* สีเทาเข้มขึ้นอีกนิด */
-            opacity: 0.30; /* ปรับความเข้มขึ้น (เดิม 0.15) */
-            font-size: 40px; /* ปรับขนาดใหญ่ขึ้นมาก (เดิม 24px) */
+            color: #374151; 
+            opacity: 0.30; 
+            font-size: 40px; 
             font-weight: 900;
             white-space: nowrap;
-            margin: 80px; /* เพิ่มระยะห่างเพราะตัวอักษรใหญ่ขึ้น */
+            margin: 80px; 
             user-select: none;
-            text-shadow: 1px 1px 2px rgba(255,255,255,0.5); /* เพิ่มเงาขาวให้อ่านง่ายขึ้นบนพื้นหลัง */
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.5); 
         }
     </style>
 </head>
@@ -145,12 +145,11 @@
             return <span ref={ref} className={`inline-flex items-center justify-center align-middle ${className}`} style={{ width: size, height: size }}></span>;
         };
 
-        // 2.2 Watermark (Updated for larger size)
+        // 2.2 Watermark (Updated: Remove IP, Keep Name/ID)
         const WatermarkOverlay = ({ text }) => {
-            // ลดจำนวนลงเหลือ 30 เพราะขนาดใหญ่ขึ้น เดี๋ยวจะรกไป
             const items = Array.from({ length: 30 }).map((_, i) => (
                 <div key={i} className="watermark-item">
-                    {text} <br/> <span style={{fontSize:'18px', fontWeight: 'normal'}}>IP: {window.location.hostname}</span>
+                    {text} {/* แสดงเฉพาะข้อความที่ส่งมา (รหัส - ชื่อ) ไม่มี IP แล้ว */}
                 </div>
             ));
             return <div className="watermark-overlay">{items}</div>;
